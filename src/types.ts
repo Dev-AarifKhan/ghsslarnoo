@@ -53,7 +53,7 @@ export interface UserSession {
   username: string;
   teacherName: string;
   schoolName: string;
-  role: 'Teacher' | 'Admin';
+  role: 'Teacher' | 'Admin' | 'Guest';
   isAuthenticated: boolean;
   isLoggedIn: boolean;
   photoUrl?: string;

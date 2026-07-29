@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { RefreshCw, CheckCircle2, AlertCircle, X, Eye } from 'lucide-react';
 import { Header } from './components/Header';
 import { SidebarNav } from './components/SidebarNav';
 import { LoginScreen } from './components/LoginScreen';
@@ -236,6 +236,10 @@ export default function App() {
 
   // Add Student Handler
   const handleAddStudent = (newStudent: Student) => {
+    if (session.role === 'Guest') {
+      alert('Read-Only Mode: Guest users cannot add new students. Please log in as a Teacher.');
+      return { success: false, message: 'Read-Only Mode: Guest users cannot perform modifications.' };
+    }
     const result = addStudent(newStudent);
     if (result.success) {
       reloadData();
@@ -245,6 +249,10 @@ export default function App() {
 
   // Bulk Add Students Handler (Excel Import)
   const handleBulkAddStudents = async (newStudents: Student[]) => {
+    if (session.role === 'Guest') {
+      alert('Read-Only Mode: Guest users cannot import students. Please log in as a Teacher.');
+      return { added: 0, updated: 0, total: 0, syncMessage: 'Read-Only Mode' };
+    }
     const result = addStudentsBulk(newStudents);
     reloadData();
 
@@ -258,6 +266,10 @@ export default function App() {
 
   // Update Student Handler
   const handleUpdateStudent = (updatedStudent: Student) => {
+    if (session.role === 'Guest') {
+      alert('Read-Only Mode: Guest users cannot edit student profiles. Please log in as a Teacher.');
+      return { success: false, message: 'Read-Only Mode' };
+    }
     const result = updateStudent(updatedStudent);
     if (result.success) {
       reloadData();
@@ -267,6 +279,10 @@ export default function App() {
 
   // Delete Student Handler
   const handleDeleteStudent = (studentId: string) => {
+    if (session.role === 'Guest') {
+      alert('Read-Only Mode: Guest users cannot delete students. Please log in as a Teacher.');
+      return { success: false, message: 'Read-Only Mode' };
+    }
     const result = deleteStudent(studentId);
     if (result.success) reloadData();
     return result;
@@ -274,6 +290,10 @@ export default function App() {
 
   // Bulk Delete Students Handler
   const handleBulkDeleteStudents = (studentIds: string[]) => {
+    if (session.role === 'Guest') {
+      alert('Read-Only Mode: Guest users cannot delete students. Please log in as a Teacher.');
+      return { success: false, message: 'Read-Only Mode' };
+    }
     const result = deleteStudentsBulk(studentIds);
     if (result.success) reloadData();
     return result;
@@ -287,6 +307,10 @@ export default function App() {
     time?: string,
     remarks?: string
   ) => {
+    if (session.role === 'Guest') {
+      alert('Read-Only Mode: Guest users cannot mark attendance. Please log in as a Teacher.');
+      return { success: false, record: null, isDuplicate: false, message: 'Read-Only Mode' };
+    }
     const result = markAttendance(studentId, status, date, time, remarks);
     reloadData();
     return result;
@@ -302,6 +326,10 @@ export default function App() {
       remarks?: string;
     }>
   ) => {
+    if (session.role === 'Guest') {
+      alert('Read-Only Mode: Guest users cannot mark attendance. Please log in as a Teacher.');
+      return { success: false, markedCount: 0, updatedCount: 0, message: 'Read-Only Mode' };
+    }
     const result = markAttendanceBatch(items);
     reloadData();
     return result;
@@ -309,6 +337,10 @@ export default function App() {
 
   // Save Settings Handler
   const handleSaveSettings = (newSettings: AppSettings) => {
+    if (session.role === 'Guest') {
+      alert('Read-Only Mode: Guest users cannot modify school settings. Please log in as a Teacher.');
+      return;
+    }
     setSettings(newSettings);
     saveSettings(newSettings);
   };
@@ -350,6 +382,24 @@ export default function App() {
         onSelectTheme={handleSelectTheme}
         onLogout={handleLogout}
       />
+
+      {/* Guest Read-Only Mode Banner */}
+      {session.role === 'Guest' && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 text-amber-200 text-xs font-medium flex items-center justify-between">
+          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
+            <Eye className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="flex-1">
+              <strong>Guest Read-Only Mode:</strong> You are viewing website content as a guest. All reports, student records, and analytics are in read-only mode.
+            </span>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-100 rounded-lg text-xs font-bold transition-all shrink-0 ml-2"
+            >
+              Log In as Teacher
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Layout with Sidebar */}
       <div className="flex-1 max-w-7xl w-full mx-auto flex flex-col md:flex-row">

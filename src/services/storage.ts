@@ -79,12 +79,12 @@ export const saveSettings = (settings: AppSettings): void => {
 export const getSession = (): UserSession => {
   const settings = getSettings();
   const defaultSession: UserSession = {
-    username: 'teacher',
+    username: '',
     teacherName: settings.teacherName,
     schoolName: settings.schoolName,
     role: 'Teacher',
-    isAuthenticated: true,
-    isLoggedIn: true,
+    isAuthenticated: false,
+    isLoggedIn: false,
   };
   const session = getItem<UserSession>(KEYS.SESSION, defaultSession);
   if (!session.schoolName || session.schoolName.includes('Vocational Education')) {

@@ -48,8 +48,20 @@ export const ManualAttendanceView: React.FC<ManualAttendanceViewProps> = ({
   const [statuses, setStatuses] = useState<Record<string, AttendanceStatus | 'Unmarked'>>({});
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  const normalizeClassName = (rawClass: string | undefined | null): string => {
+    if (!rawClass) return '';
+    const classStr = String(rawClass).trim().toLowerCase();
+    if (classStr.includes('12') || classStr.includes('twelve')) return 'Class 12';
+    if (classStr.includes('11') || classStr.includes('eleven')) return 'Class 11';
+    if (classStr.includes('10') || classStr.includes('ten')) return 'Class 10';
+    if (classStr.includes('9') || classStr.includes('nine')) return 'Class 9';
+    return String(rawClass).trim();
+  };
+
   const classStudents = students.filter((s) => {
-    const matchesClass = s.className === selectedClass;
+    const matchesClass =
+      s.className === selectedClass ||
+      normalizeClassName(s.className) === normalizeClassName(selectedClass);
     const matchesSearch =
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.id.toLowerCase().includes(searchQuery.toLowerCase());

@@ -45,8 +45,21 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   // Filter raw attendance records
   const cleanSearch = searchQuery.trim().toLowerCase();
 
+  const normalizeClassName = (rawClass: string | undefined | null): string => {
+    if (!rawClass) return '';
+    const classStr = String(rawClass).trim().toLowerCase();
+    if (classStr.includes('12') || classStr.includes('twelve')) return 'Class 12';
+    if (classStr.includes('11') || classStr.includes('eleven')) return 'Class 11';
+    if (classStr.includes('10') || classStr.includes('ten')) return 'Class 10';
+    if (classStr.includes('9') || classStr.includes('nine')) return 'Class 9';
+    return String(rawClass).trim();
+  };
+
   const filteredRecords = attendance.filter((r) => {
-    const matchesClass = selectedClass === 'All' || r.className === selectedClass;
+    const matchesClass =
+      selectedClass === 'All' ||
+      r.className === selectedClass ||
+      normalizeClassName(r.className) === normalizeClassName(selectedClass);
     const matchesMonth = selectedMonth === 'All' || r.month === selectedMonth;
     const matchesStatus = selectedStatus === 'All' || r.status === selectedStatus;
     const matchesSearch =
@@ -60,7 +73,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
   // Calculate Student Summary (Working Days, Present, Absent, Late, Leave, %)
   const targetStudents = students.filter((s) => {
-    const matchesClass = selectedClass === 'All' || s.className === selectedClass;
+    const matchesClass =
+      selectedClass === 'All' ||
+      s.className === selectedClass ||
+      normalizeClassName(s.className) === normalizeClassName(selectedClass);
     const matchesSearch =
       !cleanSearch ||
       String(s.id || '').toLowerCase().includes(cleanSearch) ||

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { QrCode, Lock, User, ShieldCheck, AlertCircle, KeyRound, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { QrCode, Lock, User, ShieldCheck, AlertCircle, KeyRound, CheckCircle2, Eye } from 'lucide-react';
 import { UserSession } from '../types';
-import { verifyUserPassword, setUserPassword, getUserPassword, getSavedLogin, saveSavedLogin } from '../services/storage';
+import { verifyUserPassword, setUserPassword, getUserPassword, saveSavedLogin } from '../services/storage';
 
 interface LoginScreenProps {
   onLoginSuccess: (session: UserSession) => void;
@@ -14,17 +14,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   defaultTeacherName,
   defaultSchoolName,
 }) => {
-  const savedLogin = getSavedLogin();
-  const currentPass = getUserPassword();
-
-  const [username, setUsername] = useState(() => savedLogin?.username || defaultTeacherName || 'Aarif Ahmad Khan');
-  const [password, setPassword] = useState(() => {
-    if (savedLogin?.password) return savedLogin.password;
-    if (savedLogin?.rememberMe === false) return '';
-    return currentPass || '';
-  });
+  // Username & Password MUST start blank by default per user security request
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<'Teacher' | 'Admin'>('Teacher');
-  const [rememberMe, setRememberMe] = useState(() => savedLogin?.rememberMe ?? true);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -34,14 +28,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [resetError, setResetError] = useState<string | null>(null);
-
-  // Sync password if savedLogin changes
-  useEffect(() => {
-    const saved = getSavedLogin();
-    if (saved && saved.rememberMe && saved.password) {
-      setPassword(saved.password);
-    }
-  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +72,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     } else {
       setError('Invalid username or password. Please check your credentials or click "Update Password?" if needed.');
     }
+  };
+
+  const handleGuestLogin = () => {
+    const guestSession: UserSession = {
+      username: 'Guest Visitor',
+      teacherName: 'Guest User',
+      schoolName: defaultSchoolName,
+      role: 'Guest',
+      isAuthenticated: true,
+      isLoggedIn: true,
+    };
+    onLoginSuccess(guestSession);
   };
 
   const handleResetPassword = (e: React.FormEvent) => {
@@ -222,6 +220,29 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             Authenticate & Access App
           </button>
         </form>
+
+        {/* Guest Read-Only Access */}
+        <div className="mt-6 pt-6 border-t border-slate-800 text-center">
+          <div className="relative flex py-1 items-center mb-4">
+            <div className="flex-grow border-t border-slate-800"></div>
+            <span className="flex-shrink mx-3 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+              Or Explore Without Credentials
+            </span>
+            <div className="flex-grow border-t border-slate-800"></div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGuestLogin}
+            className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 hover:border-cyan-500/50 text-cyan-300 hover:text-cyan-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2.5 shadow-md active:scale-95"
+          >
+            <Eye className="w-4 h-4 text-cyan-400" />
+            <span>Continue as Guest (Read Only)</span>
+          </button>
+          <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+            Guest mode allows viewing attendance reports, dashboard, and student records in read-only mode.
+          </p>
+        </div>
       </div>
 
       {/* Password Reset Modal */}

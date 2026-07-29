@@ -13,6 +13,8 @@ import {
   Building2,
   BookOpen,
   FileSpreadsheet,
+  Eye,
+  LogIn,
 } from 'lucide-react';
 import { AppSettings, UserSession, SyncStatus, ThemePreset } from '../types';
 
@@ -278,47 +280,59 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* User Profile Avatar Dropdown */}
-            <div className="relative">
+            {session.role === 'Guest' ? (
               <button
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="flex items-center space-x-2 p-1 rounded-lg hover:bg-white/5 transition-colors"
+                onClick={onLogout}
+                className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 transition-all text-xs font-bold shadow-sm"
+                title="Guest Mode (Read Only) - Click to Log In as Teacher"
               >
-                <div className="h-9 w-9 rounded-full border border-white/20 bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center text-xs font-medium text-white shadow-md">
-                  {session.teacherName ? session.teacherName.split(' ').map(n=>n[0]).join('').slice(0,2) : 'AB'}
-                </div>
+                <Eye className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline">Guest (Read Only)</span>
+                <LogIn className="w-3.5 h-3.5 ml-1 text-amber-300" />
               </button>
-
-              {showProfileMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-[#111] border border-white/10 rounded-2xl shadow-2xl py-2 z-50 text-gray-200">
-                  <div className="px-4 py-3 border-b border-white/10">
-                    <p className="text-sm font-medium text-white truncate">{session.teacherName}</p>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-tighter truncate">{session.role} • {settings.schoolName}</p>
+            ) : (
+              <div className="relative">
+                <button
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
+                  className="flex items-center space-x-2 p-1 rounded-lg hover:bg-white/5 transition-colors"
+                >
+                  <div className="h-9 w-9 rounded-full border border-white/20 bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center text-xs font-medium text-white shadow-md">
+                    {session.teacherName ? session.teacherName.split(' ').map(n=>n[0]).join('').slice(0,2) : 'AB'}
                   </div>
+                </button>
 
-                  <button
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      onSelectTab('settings');
-                    }}
-                    className="w-full text-left px-4 py-2 text-xs hover:bg-white/5 flex items-center gap-2 text-gray-300"
-                  >
-                    <Building2 className="w-4 h-4 text-gray-400" />
-                    School & Teacher Settings
-                  </button>
+                {showProfileMenu && (
+                  <div className="absolute right-0 mt-2 w-64 bg-[#111] border border-white/10 rounded-2xl shadow-2xl py-2 z-50 text-gray-200">
+                    <div className="px-4 py-3 border-b border-white/10">
+                      <p className="text-sm font-medium text-white truncate">{session.teacherName}</p>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-tighter truncate">{session.role} • {settings.schoolName}</p>
+                    </div>
 
-                  <button
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      onLogout();
-                    }}
-                    className="w-full text-left px-4 py-2 text-xs hover:bg-rose-500/10 text-rose-400 flex items-center gap-2 border-t border-white/10 mt-1"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Sign Out Teacher Session
-                  </button>
-                </div>
-              )}
-            </div>
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        onSelectTab('settings');
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs hover:bg-white/5 flex items-center gap-2 text-gray-300"
+                    >
+                      <Building2 className="w-4 h-4 text-gray-400" />
+                      School & Teacher Settings
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        onLogout();
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs hover:bg-rose-500/10 text-rose-400 flex items-center gap-2 border-t border-white/10 mt-1"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign Out Teacher Session
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
