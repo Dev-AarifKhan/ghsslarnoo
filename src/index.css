@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #080808;
+    color: #e5e7eb;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  .font-serif {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+}
+
+/* Light Mode Overrides */
+.theme-light,
+.theme-slate {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.theme-slate {
+  background-color: #f1f5f9 !important;
+}
+
+.theme-light .bg-\[\#111\],
+.theme-light .bg-\[\#0a0a0a\],
+.theme-light .bg-\[\#0d1117\],
+.theme-light .bg-slate-900,
+.theme-light .bg-slate-950\/40,
+.theme-slate .bg-\[\#111\],
+.theme-slate .bg-\[\#0a0a0a\],
+.theme-slate .bg-\[\#0d1117\],
+.theme-slate .bg-slate-900,
+.theme-slate .bg-slate-950\/40 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.theme-light .border-white\/5,
+.theme-light .border-white\/10,
+.theme-light .border-slate-800,
+.theme-light .border-slate-800\/80,
+.theme-light .border-slate-700,
+.theme-slate .border-white\/5,
+.theme-slate .border-white\/10,
+.theme-slate .border-slate-800,
+.theme-slate .border-slate-800\/80,
+.theme-slate .border-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+
+.theme-light .text-white,
+.theme-light .text-slate-100,
+.theme-light .text-slate-200,
+.theme-slate .text-white,
+.theme-slate .text-slate-100,
+.theme-slate .text-slate-200 {
+  color: #0f172a !important;
+}
+
+.theme-light .text-gray-300,
+.theme-light .text-gray-400,
+.theme-light .text-slate-300,
+.theme-light .text-slate-400,
+.theme-slate .text-gray-300,
+.theme-slate .text-gray-400,
+.theme-slate .text-slate-300,
+.theme-slate .text-slate-400 {
+  color: #334155 !important;
+}
+
+.theme-light .text-gray-500,
+.theme-light .text-slate-500,
+.theme-slate .text-gray-500,
+.theme-slate .text-slate-500 {
+  color: #64748b !important;
+}
+
+.theme-light .bg-slate-800,
+.theme-slate .bg-slate-800 {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Custom dark scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+

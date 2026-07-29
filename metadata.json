@@ -1,0 +1,10 @@
+{
+  "name": "Vocational Attendance System",
+  "description": "QR Code Attendance Management System for Vocational Subject IT/ITES with Google Sheets API integration, Camera Scanner, Enrollment, Analytics, and Excel/PDF Reports.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

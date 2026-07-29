@@ -1,0 +1,69 @@
+{
+  "entities": {
+    "attendance": {
+      "title": "Attendance",
+      "description": "Real-time attendance records marked across devices",
+      "properties": {
+        "student_id": {
+          "type": "string",
+          "description": "Student ID"
+        },
+        "class_id": {
+          "type": "string",
+          "description": "Class identifier (e.g. Class 9, Class 10)"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of attendance record"
+        },
+        "status": {
+          "type": "string",
+          "description": "Attendance status e.g. Present, Late, Absent"
+        },
+        "device_id": {
+          "type": "string",
+          "description": "Device ID or scanner name"
+        }
+      },
+      "required": [
+        "student_id",
+        "status"
+      ]
+    },
+    "students": {
+      "title": "Students",
+      "description": "Enrolled vocational students directory",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parentage": {
+          "type": "string"
+        },
+        "className": {
+          "type": "string"
+        },
+        "stream": {
+          "type": "string"
+        },
+        "academicSession": {
+          "type": "string"
+        },
+        "gender": {
+          "type": "string"
+        },
+        "photoUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    }
+  }
+}
