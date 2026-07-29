@@ -47,7 +47,9 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({ students, attendan
   });
 
   // Filter attendance for selected student
-  const studentRecords = attendance.filter((r) => r.studentId === selectedStudent?.id);
+  const studentRecords = attendance.filter(
+    (r) => r.studentId.toLowerCase() === selectedStudent?.id.toLowerCase()
+  );
 
   const presentCount = studentRecords.filter((r) => r.status === 'Present').length;
   const absentCount = studentRecords.filter((r) => r.status === 'Absent').length;

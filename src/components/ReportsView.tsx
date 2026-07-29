@@ -134,12 +134,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const studentDateMap = React.useMemo(() => {
     const map: Record<string, Record<string, AttendanceRecord>> = {};
     attendance.forEach((r) => {
-      if (!map[r.studentId]) {
-        map[r.studentId] = {};
+      const sid = r.studentId.toLowerCase();
+      if (!map[sid]) {
+        map[sid] = {};
       }
-      const existing = map[r.studentId][r.date];
+      const existing = map[sid][r.date];
       if (!existing || (r.timestamp || 0) >= (existing.timestamp || 0)) {
-        map[r.studentId][r.date] = r;
+        map[sid][r.date] = r;
       }
     });
     return map;
@@ -174,7 +175,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           const dayCells = isDayWise
             ? uniqueDates
                 .map((d) => {
-                  const record = studentDateMap[s.studentId]?.[d];
+                  const record = studentDateMap[s.studentId.toLowerCase()]?.[d];
                   const status = record ? record.status : '-';
                   const badgeClass =
                     status === 'Present'
@@ -436,7 +437,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   {viewMode === 'daywise' &&
                     (uniqueDates.length > 0 ? (
                       uniqueDates.map((d) => {
-                        const rec = studentDateMap[s.studentId]?.[d];
+                        const rec = studentDateMap[s.studentId.toLowerCase()]?.[d];
                         const status = rec ? rec.status : '-';
                         return (
                           <td key={d} className="px-3 py-3 text-center">

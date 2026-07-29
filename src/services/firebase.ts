@@ -56,6 +56,36 @@ const cleanPayload = <T extends Record<string, any>>(obj: T): Record<string, any
   return clean;
 };
 
+// Helper to reliably extract year, month, and day from YYYY-MM-DD date strings
+export const parseDateInfo = (dateStr: string) => {
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  let year = 2026;
+  let month = 'July';
+  let day = 'Monday';
+
+  if (dateStr && typeof dateStr === 'string') {
+    const parts = dateStr.trim().split('-');
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        const dateObj = new Date(y, m, d);
+        year = y;
+        month = monthNames[m] || 'July';
+        day = dayNames[dateObj.getDay()] || 'Monday';
+      }
+    }
+  }
+
+  return { year, month, day };
+};
+
 // 2. Real-time Attendance Listener
 export const subscribeToAttendance = (
   onUpdate: (records: AttendanceRecord[]) => void,
@@ -87,11 +117,7 @@ export const subscribeToAttendance = (
         const rawStudentId = data.student_id || data.studentId || '';
         const student = getStudentInfo ? getStudentInfo(rawStudentId) : undefined;
 
-        const monthNames = [
-          'January', 'February', 'March', 'April', 'May', 'June',
-          'July', 'August', 'September', 'October', 'November', 'December'
-        ];
-        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dateInfo = parseDateInfo(dateStr);
 
         return {
           id: docSnap.id,
@@ -100,9 +126,9 @@ export const subscribeToAttendance = (
           className: data.class_id || data.className || student?.className || 'Class 9',
           date: dateStr,
           time: timeStr,
-          day: data.day || dayNames[dateObj.getDay()] || 'Monday',
-          month: data.month || monthNames[dateObj.getMonth()] || 'July',
-          year: data.year || dateObj.getFullYear() || 2026,
+          day: data.day || dateInfo.day,
+          month: data.month || dateInfo.month,
+          year: data.year || dateInfo.year,
           status: (data.status as AttendanceStatus) || 'Present',
           deviceName: data.device_id || data.deviceName || 'Scanner Device',
           teacherName: data.teacher_name || data.teacherName || 'Teacher',
@@ -181,6 +207,8 @@ export const saveAttendanceToFirestore = async (record: {
     record.customTime ||
     new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
+  const dateInfo = parseDateInfo(dateStr);
+
   const sanitizedStudentId = record.studentId.trim().replace(/[/\\#?]/g, '-');
   const docId = `${sanitizedStudentId.toLowerCase()}_${dateStr}`;
   const docRef = doc(db, 'attendance', docId);
@@ -194,6 +222,9 @@ export const saveAttendanceToFirestore = async (record: {
     student_name: record.studentName || '',
     date: dateStr,
     time: timeStr,
+    day: dateInfo.day,
+    month: dateInfo.month,
+    year: dateInfo.year,
     remarks: record.remarks || '',
     teacher_name: record.teacherName || 'Teacher',
   });
@@ -227,6 +258,8 @@ export const saveAttendanceBatchToFirestore = async (
         record.customTime ||
         new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
+      const dateInfo = parseDateInfo(dateStr);
+
       const sanitizedStudentId = record.studentId.trim().replace(/[/\\#?]/g, '-');
       const docId = `${sanitizedStudentId.toLowerCase()}_${dateStr}`;
       const docRef = doc(db, 'attendance', docId);
@@ -240,6 +273,9 @@ export const saveAttendanceBatchToFirestore = async (
         student_name: record.studentName || '',
         date: dateStr,
         time: timeStr,
+        day: dateInfo.day,
+        month: dateInfo.month,
+        year: dateInfo.year,
         remarks: record.remarks || '',
         teacher_name: record.teacherName || 'Teacher',
       });

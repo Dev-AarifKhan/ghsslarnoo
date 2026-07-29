@@ -56,7 +56,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ students, attendan
   // Attendance Shortage Alert List (<75%)
   const shortageStudents = students
     .map((s) => {
-      const sRecords = attendance.filter((r) => r.studentId === s.id);
+      const sRecords = attendance.filter((r) => r.studentId.toLowerCase() === s.id.toLowerCase());
       const present = sRecords.filter((r) => r.status === 'Present' || r.status === 'Late').length;
       const total = sRecords.length || 1;
       const percentage = Math.round((present / total) * 100);

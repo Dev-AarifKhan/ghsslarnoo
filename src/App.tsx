@@ -39,6 +39,7 @@ import {
   deleteStudent,
   deleteStudentsBulk,
   getAttendanceRecords,
+  saveAttendanceRecords,
   markAttendance,
   markAttendanceBatch,
   getLogs,
@@ -86,16 +87,16 @@ export default function App() {
   useEffect(() => {
     const unsubscribeAttendance = subscribeToAttendance(
       (updatedRecords) => {
-        if (updatedRecords && updatedRecords.length > 0) {
-          setAttendance(updatedRecords);
-          setSyncStatus((prev) => ({
-            ...prev,
-            lastSyncTime: new Date().toLocaleTimeString(),
-            isSyncing: false,
-            pendingCount: 0,
-            error: null,
-          }));
-        }
+        const validRecords = updatedRecords || [];
+        setAttendance(validRecords);
+        saveAttendanceRecords(validRecords);
+        setSyncStatus((prev) => ({
+          ...prev,
+          lastSyncTime: new Date().toLocaleTimeString(),
+          isSyncing: false,
+          pendingCount: 0,
+          error: null,
+        }));
       },
       (id) => students.find((s) => s.id.toLowerCase() === id.toLowerCase())
     );
