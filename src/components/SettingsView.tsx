@@ -20,7 +20,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { AppSettings, ActivityLog } from '../types';
-import { exportDatabaseJSON, importDatabaseJSON, verifyUserPassword, setUserPassword, clearAllData } from '../services/storage';
+import { exportDatabaseJSON, importDatabaseJSON, verifyUserPassword, verifyUserPasswordAsync, setUserPassword, clearAllData } from '../services/storage';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -52,32 +52,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setFeedback(null), 3000);
   };
 
-  const handlePasswordChange = (e: React.FormEvent) => {
+  const [isUpdatingPass, setIsUpdatingPass] = useState(false);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPassError(null);
     setPassSuccess(null);
 
-    if (!verifyUserPassword(currentPass)) {
-      setPassError('Current password is incorrect.');
-      return;
-    }
+    setIsUpdatingPass(true);
+    try {
+      const isValid = await verifyUserPasswordAsync(currentPass);
+      if (!isValid) {
+        setPassError('Current password is incorrect.');
+        setIsUpdatingPass(false);
+        return;
+      }
 
-    if (!newPass.trim() || newPass.length < 4) {
-      setPassError('New password must be at least 4 characters long.');
-      return;
-    }
+      if (!newPass.trim() || newPass.length < 4) {
+        setPassError('New password must be at least 4 characters long.');
+        setIsUpdatingPass(false);
+        return;
+      }
 
-    if (newPass !== confirmPass) {
-      setPassError('New password and confirm password do not match.');
-      return;
-    }
+      if (newPass !== confirmPass) {
+        setPassError('New password and confirm password do not match.');
+        setIsUpdatingPass(false);
+        return;
+      }
 
-    setUserPassword(newPass);
-    setPassSuccess('Account password updated successfully!');
-    setCurrentPass('');
-    setNewPass('');
-    setConfirmPass('');
-    setTimeout(() => setPassSuccess(null), 4000);
+      await setUserPassword(newPass);
+      setPassSuccess('Account password updated centrally in Firestore database! Synced across all devices.');
+      setCurrentPass('');
+      setNewPass('');
+      setConfirmPass('');
+      setTimeout(() => setPassSuccess(null), 5000);
+    } catch (err) {
+      setPassError('Failed to sync password to central database. Please try again.');
+    } finally {
+      setIsUpdatingPass(false);
+    }
   };
 
   const handleExportBackup = () => {

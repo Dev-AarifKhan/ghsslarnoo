@@ -3,6 +3,7 @@ import {
   getFirestore,
   collection,
   doc,
+  getDoc,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -339,4 +340,80 @@ export const deleteStudentsBatchFromFirestore = async (studentIds: string[]): Pr
 
     await batch.commit();
   }
+};
+
+// 4. Central Password Synchronization in Firestore
+export const subscribeToCredentialsPassword = (
+  onUpdate: (password: string) => void
+) => {
+  const credRef = doc(db, 'credentials', 'teacher');
+
+  return onSnapshot(
+    credRef,
+    async (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data && typeof data.password === 'string' && data.password.trim()) {
+          onUpdate(data.password.trim());
+        }
+      } else {
+        // Initialize central database credentials if document does not exist yet
+        try {
+          let defaultPass = 'password123';
+          if (typeof localStorage !== 'undefined') {
+            const local = localStorage.getItem('vas_credentials_v1');
+            if (local) {
+              try {
+                defaultPass = JSON.parse(local) || 'password123';
+              } catch (e) {
+                // Ignore parse error
+              }
+            }
+          }
+          await setDoc(
+            credRef,
+            {
+              password: defaultPass,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+          onUpdate(defaultPass);
+        } catch (e) {
+          console.error('Error initializing central credentials in Firestore:', e);
+        }
+      }
+    },
+    (error) => {
+      console.error('Firestore credentials subscription error:', error);
+    }
+  );
+};
+
+export const savePasswordToFirestore = async (newPassword: string): Promise<void> => {
+  const credRef = doc(db, 'credentials', 'teacher');
+  await setDoc(
+    credRef,
+    {
+      password: newPassword.trim(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+};
+
+export const fetchPasswordFromFirestore = async (): Promise<string | null> => {
+  try {
+    const credRef = doc(db, 'credentials', 'teacher');
+    const docSnap = await getDoc(credRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data && typeof data.password === 'string' && data.password.trim()) {
+        return data.password.trim();
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching password from Firestore:', err);
+  }
+  return null;
 };

@@ -57,6 +57,7 @@ export interface UserSession {
   isAuthenticated: boolean;
   isLoggedIn: boolean;
   photoUrl?: string;
+  loginPassword?: string;
 }
 
 export type ThemePreset = 'dark' | 'light' | 'slate' | 'midnight' | 'emerald' | 'sunset';

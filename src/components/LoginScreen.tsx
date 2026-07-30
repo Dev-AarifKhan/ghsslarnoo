@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { QrCode, Lock, User, ShieldCheck, AlertCircle, KeyRound, CheckCircle2, Eye } from 'lucide-react';
+import { QrCode, Lock, User, ShieldCheck, AlertCircle, KeyRound, CheckCircle2, Eye, RefreshCw } from 'lucide-react';
 import { UserSession } from '../types';
-import { verifyUserPassword, setUserPassword, getUserPassword, saveSavedLogin } from '../services/storage';
+import { verifyUserPassword, verifyUserPasswordAsync, setUserPassword, getUserPassword, saveSavedLogin } from '../services/storage';
 
 interface LoginScreenProps {
   onLoginSuccess: (session: UserSession) => void;
@@ -21,6 +21,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   // Reset password modal state
   const [showResetModal, setShowResetModal] = useState(false);
@@ -29,48 +30,57 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [confirmPass, setConfirmPass] = useState('');
   const [resetError, setResetError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!username.trim() || !password.trim()) {
       setError('Please enter both username and password.');
       return;
     }
 
-    const isValid = verifyUserPassword(password);
-    const un = username.trim().toLowerCase();
-    const teacherLower = (defaultTeacherName || 'aarif ahmad khan').toLowerCase();
+    setIsAuthenticating(true);
+    try {
+      const isValid = await verifyUserPasswordAsync(password);
+      const un = username.trim().toLowerCase();
+      const teacherLower = (defaultTeacherName || 'aarif ahmad khan').toLowerCase();
 
-    // Accept teacher name, partial instructor name, or standard handles
-    const isAllowedUser =
-      un === teacherLower ||
-      un.includes('aarif') ||
-      un.includes('khan') ||
-      un === 'teacher' ||
-      un === 'admin';
+      // Accept teacher name, partial instructor name, or standard handles
+      const isAllowedUser =
+        un === teacherLower ||
+        un.includes('aarif') ||
+        un.includes('khan') ||
+        un === 'teacher' ||
+        un === 'admin';
 
-    if (isAllowedUser && isValid) {
-      if (rememberMe) {
-        saveSavedLogin({
+      if (isAllowedUser && isValid) {
+        if (rememberMe) {
+          saveSavedLogin({
+            username: username.trim(),
+            password: password.trim(),
+            role: role,
+            rememberMe: true,
+          });
+        } else {
+          saveSavedLogin(null);
+        }
+
+        const session: UserSession = {
           username: username.trim(),
-          password: password.trim(),
+          teacherName: defaultTeacherName || 'Aarif Ahmad Khan',
+          schoolName: defaultSchoolName,
           role: role,
-          rememberMe: true,
-        });
+          isAuthenticated: true,
+          isLoggedIn: true,
+          loginPassword: password.trim(),
+        };
+        onLoginSuccess(session);
       } else {
-        saveSavedLogin(null);
+        setError('Invalid username or password. Passwords are synchronized centrally in Firestore.');
       }
-
-      const session: UserSession = {
-        username: username.trim(),
-        teacherName: defaultTeacherName || 'Aarif Ahmad Khan',
-        schoolName: defaultSchoolName,
-        role: role,
-        isAuthenticated: true,
-        isLoggedIn: true,
-      };
-      onLoginSuccess(session);
-    } else {
-      setError('Invalid username or password. Please check your credentials or click "Update Password?" if needed.');
+    } catch (err) {
+      setError('Authentication error. Please check your network or try again.');
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
@@ -86,36 +96,48 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     onLoginSuccess(guestSession);
   };
 
-  const handleResetPassword = (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setResetError(null);
 
-    if (!verifyUserPassword(oldPass)) {
-      setResetError('Old / Current password is incorrect.');
-      return;
-    }
+    setIsAuthenticating(true);
+    try {
+      const isValidOld = await verifyUserPasswordAsync(oldPass);
+      if (!isValidOld) {
+        setResetError('Old / Current password is incorrect.');
+        setIsAuthenticating(false);
+        return;
+      }
 
-    if (!newPass.trim()) {
-      setResetError('Please enter a new password.');
-      return;
-    }
-    if (newPass.length < 4) {
-      setResetError('Password must be at least 4 characters.');
-      return;
-    }
-    if (newPass !== confirmPass) {
-      setResetError('Passwords do not match.');
-      return;
-    }
+      if (!newPass.trim()) {
+        setResetError('Please enter a new password.');
+        setIsAuthenticating(false);
+        return;
+      }
+      if (newPass.length < 4) {
+        setResetError('Password must be at least 4 characters.');
+        setIsAuthenticating(false);
+        return;
+      }
+      if (newPass !== confirmPass) {
+        setResetError('Passwords do not match.');
+        setIsAuthenticating(false);
+        return;
+      }
 
-    setUserPassword(newPass);
-    setShowResetModal(false);
-    setSuccessMsg('Password updated successfully! You can now log in with your new password.');
-    setPassword(newPass);
-    setOldPass('');
-    setNewPass('');
-    setConfirmPass('');
-    setError(null);
+      await setUserPassword(newPass);
+      setShowResetModal(false);
+      setSuccessMsg('Password updated centrally in database! Log in with your new password on any device.');
+      setPassword(newPass);
+      setOldPass('');
+      setNewPass('');
+      setConfirmPass('');
+      setError(null);
+    } catch (err) {
+      setResetError('Failed to update password in central database. Please try again.');
+    } finally {
+      setIsAuthenticating(false);
+    }
   };
 
   return (

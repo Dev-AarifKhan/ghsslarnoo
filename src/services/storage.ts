@@ -8,6 +8,9 @@ import {
   deleteStudentFromFirestore,
   deleteStudentsBatchFromFirestore,
   getDeviceId,
+  subscribeToCredentialsPassword,
+  savePasswordToFirestore,
+  fetchPasswordFromFirestore,
 } from './firebase';
 
 const KEYS = {
@@ -124,23 +127,67 @@ export const saveSavedLogin = (info: SavedLoginInfo | null): void => {
   }
 };
 
-export const getUserPassword = (): string => {
-  return getItem<string>(KEYS.CREDENTIALS, 'password123');
+let cachedPassword: string = getItem<string>(KEYS.CREDENTIALS, 'password123');
+
+export const initPasswordRealtimeSync = (onRemoteChange?: (newPass: string) => void) => {
+  return subscribeToCredentialsPassword((remotePass) => {
+    const oldPass = cachedPassword;
+    cachedPassword = remotePass;
+    setItem(KEYS.CREDENTIALS, remotePass);
+    if (oldPass !== remotePass && onRemoteChange) {
+      onRemoteChange(remotePass);
+    }
+  });
 };
 
-export const setUserPassword = (newPassword: string): void => {
+export const getUserPassword = (): string => {
+  return cachedPassword || getItem<string>(KEYS.CREDENTIALS, 'password123');
+};
+
+export const setUserPassword = async (newPassword: string): Promise<void> => {
   const cleanPass = newPassword.trim();
+  cachedPassword = cleanPass;
   setItem(KEYS.CREDENTIALS, cleanPass);
   const saved = getSavedLogin();
   if (saved && saved.rememberMe) {
     saveSavedLogin({ ...saved, password: cleanPass });
   }
-  addLog('Security Update', 'Account password was updated successfully', 'Success');
+
+  // Update current device's active session loginPassword so it doesn't self-invalidate
+  const currentSession = getSession();
+  if (currentSession.isLoggedIn) {
+    saveSession({
+      ...currentSession,
+      loginPassword: cleanPass,
+    });
+  }
+
+  addLog('Security Update', 'Account password was updated successfully in central database', 'Success');
+
+  try {
+    await savePasswordToFirestore(cleanPass);
+  } catch (err) {
+    console.error('Failed to sync password to Firestore:', err);
+  }
 };
 
 export const verifyUserPassword = (inputPassword: string): boolean => {
   const stored = getUserPassword();
   return inputPassword.trim() === stored;
+};
+
+export const verifyUserPasswordAsync = async (inputPassword: string): Promise<boolean> => {
+  try {
+    const remotePass = await fetchPasswordFromFirestore();
+    if (remotePass) {
+      cachedPassword = remotePass;
+      setItem(KEYS.CREDENTIALS, remotePass);
+      return inputPassword.trim() === remotePass;
+    }
+  } catch (e) {
+    console.error('Async password fetch error from Firestore:', e);
+  }
+  return verifyUserPassword(inputPassword);
 };
 
 // Students

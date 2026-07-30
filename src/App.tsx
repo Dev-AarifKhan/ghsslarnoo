@@ -43,6 +43,7 @@ import {
   markAttendance,
   markAttendanceBatch,
   getLogs,
+  initPasswordRealtimeSync,
 } from './services/storage';
 
 import {
@@ -113,9 +114,31 @@ export default function App() {
       }
     );
 
+    // Real-time Central Password Synchronization listener across all devices
+    const unsubscribePassword = initPasswordRealtimeSync((newRemotePassword) => {
+      console.log('[App Realtime Security] Central password updated in Firestore.');
+      const currentSession = getSession();
+      if (
+        currentSession.isLoggedIn &&
+        currentSession.role !== 'Guest' &&
+        currentSession.loginPassword &&
+        currentSession.loginPassword !== newRemotePassword
+      ) {
+        const invalidatedSession: UserSession = {
+          ...currentSession,
+          isAuthenticated: false,
+          isLoggedIn: false,
+        };
+        saveSession(invalidatedSession);
+        setSession(invalidatedSession);
+        alert('🔐 Security Alert: Your account password was updated on another device. Please log in with your new password.');
+      }
+    });
+
     return () => {
       unsubscribeAttendance();
       unsubscribeStudents();
+      unsubscribePassword();
     };
   }, []);
 
