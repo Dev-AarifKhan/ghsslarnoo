@@ -142,67 +142,114 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
 
   // Helper to convert modern CSS color functions (like oklch, oklab, color-mix) into standard rgb/rgba
   const convertModernColorFunctions = (str: string): string => {
-    if (!str) return str;
+    if (!str || typeof str !== 'string') return str;
+    if (!/oklch|oklab|color-mix|light-dark|color\(/i.test(str)) return str;
+
     let result = str;
 
-    result = result.replace(/oklch\(([^)]+)\)/gi, (match, content) => {
-      try {
-        const parts = content.trim().split(/[\s\/]+/);
-        if (parts.length < 3) return 'rgb(15, 23, 42)';
+    // Helper to replace function calls taking care of nested parentheses
+    const replaceFunctionCalls = (
+      input: string,
+      funcName: string,
+      replacer: (fullMatch: string, innerContent: string) => string
+    ): string => {
+      let output = '';
+      let pos = 0;
+      const lower = input.toLowerCase();
+      const needle = funcName.toLowerCase() + '(';
 
-        const lStr = parts[0];
-        const cStr = parts[1];
-        const hStr = parts[2];
-        const aStr = parts[3];
-
-        let L = lStr.endsWith('%') ? parseFloat(lStr) / 100 : parseFloat(lStr);
-        let C = parseFloat(cStr);
-        let H = parseFloat(hStr);
-        if (isNaN(H)) H = 0;
-
-        let alpha = 1;
-        if (aStr !== undefined) {
-          alpha = aStr.endsWith('%') ? parseFloat(aStr) / 100 : parseFloat(aStr);
-          if (isNaN(alpha)) alpha = 1;
+      while (pos < input.length) {
+        const start = lower.indexOf(needle, pos);
+        if (start === -1) {
+          output += input.slice(pos);
+          break;
         }
 
-        if (isNaN(L) || isNaN(C)) return 'rgb(15, 23, 42)';
+        output += input.slice(pos, start);
+        let depth = 1;
+        let end = start + needle.length;
 
-        // OKLCH to OKLAB
-        const rad = (H * Math.PI) / 180;
-        const aLab = C * Math.cos(rad);
-        const bLab = C * Math.sin(rad);
+        while (end < input.length && depth > 0) {
+          if (input[end] === '(') depth++;
+          else if (input[end] === ')') depth--;
+          end++;
+        }
 
-        // OKLAB to linear RGB
-        const l_ = L + 0.3963377774 * aLab + 0.2158037573 * bLab;
-        const m_ = L - 0.1055613458 * aLab - 0.0638541728 * bLab;
-        const s_ = L - 0.0894841775 * aLab - 1.291485548 * bLab;
-
-        const l = l_ * l_ * l_;
-        const m = m_ * m_ * m_;
-        const s = s_ * s_ * s_;
-
-        let r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
-        let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
-        let b = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
-
-        // Gamma correction
-        r = r > 0.0031308 ? 1.055 * Math.pow(r, 1 / 2.4) - 0.055 : 12.92 * r;
-        g = g > 0.0031308 ? 1.055 * Math.pow(g, 1 / 2.4) - 0.055 : 12.92 * g;
-        b = b > 0.0031308 ? 1.055 * Math.pow(b, 1 / 2.4) - 0.055 : 12.92 * b;
-
-        const r255 = Math.min(255, Math.max(0, Math.round(r * 255)));
-        const g255 = Math.min(255, Math.max(0, Math.round(g * 255)));
-        const b255 = Math.min(255, Math.max(0, Math.round(b * 255)));
-
-        return alpha < 1
-          ? `rgba(${r255}, ${g255}, ${b255}, ${alpha.toFixed(3)})`
-          : `rgb(${r255}, ${g255}, ${b255})`;
-      } catch (e) {
-        return 'rgb(15, 23, 42)';
+        const fullMatch = input.slice(start, end);
+        const inner = input.slice(start + needle.length, end - (depth === 0 ? 1 : 0));
+        output += replacer(fullMatch, inner);
+        pos = end;
       }
+      return output;
+    };
+
+    // Convert oklch calls
+    result = replaceFunctionCalls(result, 'oklch', (_full, content) => {
+      try {
+        const parts = content.trim().split(/[\s\/]+/);
+        if (parts.length >= 3) {
+          const lStr = parts[0];
+          const cStr = parts[1];
+          const hStr = parts[2];
+          const aStr = parts[3];
+
+          let L = lStr.endsWith('%') ? parseFloat(lStr) / 100 : parseFloat(lStr);
+          let C = parseFloat(cStr);
+          let H = parseFloat(hStr);
+          if (isNaN(H)) H = 0;
+
+          let alpha = 1;
+          if (aStr !== undefined) {
+            alpha = aStr.endsWith('%') ? parseFloat(aStr) / 100 : parseFloat(aStr);
+            if (isNaN(alpha)) alpha = 1;
+          }
+
+          if (!isNaN(L) && !isNaN(C)) {
+            // OKLCH to OKLAB
+            const rad = (H * Math.PI) / 180;
+            const aLab = C * Math.cos(rad);
+            const bLab = C * Math.sin(rad);
+
+            // OKLAB to linear RGB
+            const l_ = L + 0.3963377774 * aLab + 0.2158037573 * bLab;
+            const m_ = L - 0.1055613458 * aLab - 0.0638541728 * bLab;
+            const s_ = L - 0.0894841775 * aLab - 1.291485548 * bLab;
+
+            const l = l_ * l_ * l_;
+            const m = m_ * m_ * m_;
+            const s = s_ * s_ * s_;
+
+            let r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+            let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+            let b = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
+
+            // Gamma correction
+            r = r > 0.0031308 ? 1.055 * Math.pow(r, 1 / 2.4) - 0.055 : 12.92 * r;
+            g = g > 0.0031308 ? 1.055 * Math.pow(g, 1 / 2.4) - 0.055 : 12.92 * g;
+            b = b > 0.0031308 ? 1.055 * Math.pow(b, 1 / 2.4) - 0.055 : 12.92 * b;
+
+            const r255 = Math.min(255, Math.max(0, Math.round(r * 255)));
+            const g255 = Math.min(255, Math.max(0, Math.round(g * 255)));
+            const b255 = Math.min(255, Math.max(0, Math.round(b * 255)));
+
+            return alpha < 1
+              ? `rgba(${r255}, ${g255}, ${b255}, ${alpha.toFixed(3)})`
+              : `rgb(${r255}, ${g255}, ${b255})`;
+          }
+        }
+      } catch (e) {
+        // Fallback below
+      }
+      return 'rgb(15, 23, 42)';
     });
 
+    // Replace any oklab, color-mix, light-dark, color(...)
+    result = replaceFunctionCalls(result, 'oklab', () => 'rgb(15, 23, 42)');
+    result = replaceFunctionCalls(result, 'color-mix', () => 'rgb(15, 23, 42)');
+    result = replaceFunctionCalls(result, 'light-dark', () => 'rgb(15, 23, 42)');
+    result = replaceFunctionCalls(result, 'color', () => 'rgb(15, 23, 42)');
+
+    // Safeguard regex to purge any residual unparsed tokens
     result = result.replace(/oklch\([\s\S]*?\)/gi, 'rgb(15, 23, 42)');
     result = result.replace(/oklab\([\s\S]*?\)/gi, 'rgb(15, 23, 42)');
     result = result.replace(/color-mix\([\s\S]*?\)/gi, 'rgb(15, 23, 42)');
@@ -268,7 +315,7 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
               colorProps.forEach((prop) => {
                 let val = computed.getPropertyValue(prop);
                 if (val && typeof val === 'string') {
-                  if (/oklch|oklab|color-mix|light-dark/i.test(val)) {
+                  if (/oklch|oklab|color-mix|light-dark|color\(/i.test(val)) {
                     val = convertModernColorFunctions(val);
                   }
                   htmlEl.style.setProperty(prop, val);
@@ -279,54 +326,85 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
             }
 
             const styleAttr = htmlEl.getAttribute('style');
-            if (styleAttr && /oklch|oklab|color-mix|light-dark/i.test(styleAttr)) {
+            if (styleAttr && /oklch|oklab|color-mix|light-dark|color\(/i.test(styleAttr)) {
               htmlEl.setAttribute('style', convertModernColorFunctions(styleAttr));
             }
           });
         }
 
-        // Sanitize all style elements
+        // 1. Sanitize all <style> elements
         clonedDoc.querySelectorAll('style').forEach((styleEl) => {
           try {
-            if (styleEl.textContent && /oklch|oklab|color-mix|light-dark/i.test(styleEl.textContent)) {
+            const sheet = styleEl.sheet;
+            if (sheet) {
+              try { sheet.disabled = true; } catch (e) {}
+            }
+            if (styleEl.textContent && /oklch|oklab|color-mix|light-dark|color\(/i.test(styleEl.textContent)) {
               styleEl.textContent = convertModernColorFunctions(styleEl.textContent);
             }
           } catch (e) {
-            // Ignore
+            if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
           }
         });
 
-        // Sanitize or replace external stylesheets
+        // 2. Sanitize and replace external <link rel="stylesheet"> tags
         clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach((linkEl) => {
           try {
             const sheet = (linkEl as HTMLLinkElement).sheet;
             if (sheet) {
-              let isClean = true;
-              const rules = Array.from(sheet.cssRules || []);
-              let newCss = '';
-              rules.forEach((rule) => {
-                let txt = rule.cssText;
-                if (/oklch|oklab|color-mix|light-dark/i.test(txt)) {
-                  isClean = false;
-                  txt = convertModernColorFunctions(txt);
-                }
-                newCss += txt + '\n';
-              });
-              if (!isClean) {
-                const newStyle = clonedDoc.createElement('style');
-                newStyle.textContent = newCss;
+              try { sheet.disabled = true; } catch (e) {}
+              let cssText = '';
+              try {
+                const rules = Array.from(sheet.cssRules || []);
+                rules.forEach((rule) => {
+                  cssText += rule.cssText + '\n';
+                });
+              } catch (e) {}
+
+              if (cssText) {
+                const cleanCss = convertModernColorFunctions(cssText);
+                const styleEl = clonedDoc.createElement('style');
+                styleEl.textContent = cleanCss;
                 if (linkEl.parentNode) {
-                  linkEl.parentNode.replaceChild(newStyle, linkEl);
+                  linkEl.parentNode.replaceChild(styleEl, linkEl);
                 }
+              } else if (linkEl.parentNode) {
+                linkEl.parentNode.removeChild(linkEl);
               }
-            }
-          } catch (e) {
-            // Cross-origin or unreadable stylesheet: remove link element from clone so html2canvas doesn't fail parsing oklch
-            if (linkEl.parentNode) {
+            } else if (linkEl.parentNode) {
               linkEl.parentNode.removeChild(linkEl);
             }
+          } catch (e) {
+            if (linkEl.parentNode) linkEl.parentNode.removeChild(linkEl);
           }
         });
+
+        // 3. Sanitize or disable remaining live CSSStyleSheets
+        try {
+          Array.from(clonedDoc.styleSheets || []).forEach((sheet) => {
+            try {
+              const rules = Array.from(sheet.cssRules || []);
+              rules.forEach((rule) => {
+                if (rule.cssText && /oklch|oklab|color-mix|light-dark|color\(/i.test(rule.cssText)) {
+                  if ((rule as CSSStyleRule).style) {
+                    const styleRule = rule as CSSStyleRule;
+                    for (let i = 0; i < styleRule.style.length; i++) {
+                      const propName = styleRule.style[i];
+                      const val = styleRule.style.getPropertyValue(propName);
+                      if (val && /oklch|oklab|color-mix|light-dark|color\(/i.test(val)) {
+                        styleRule.style.setProperty(propName, convertModernColorFunctions(val));
+                      }
+                    }
+                  }
+                }
+              });
+            } catch (e) {
+              try { sheet.disabled = true; } catch (err) {}
+            }
+          });
+        } catch (e) {
+          // Ignore
+        }
       },
     });
   };

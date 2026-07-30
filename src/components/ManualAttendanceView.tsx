@@ -46,7 +46,6 @@ export const ManualAttendanceView: React.FC<ManualAttendanceViewProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statuses, setStatuses] = useState<Record<string, AttendanceStatus | 'Unmarked'>>({});
-  const [feedback, setFeedback] = useState<string | null>(null);
 
   const normalizeClassName = (rawClass: string | undefined | null): string => {
     if (!rawClass) return '';
@@ -86,11 +85,7 @@ export const ManualAttendanceView: React.FC<ManualAttendanceViewProps> = ({
 
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
     setStatuses((prev) => ({ ...prev, [studentId]: status }));
-    const result = onMarkAttendance(studentId, status, selectedDate);
-    if (result.success) {
-      setFeedback(result.message);
-      setTimeout(() => setFeedback(null), 3000);
-    }
+    onMarkAttendance(studentId, status, selectedDate);
   };
 
   const handleMarkAll = (status: AttendanceStatus) => {
@@ -111,9 +106,6 @@ export const ManualAttendanceView: React.FC<ManualAttendanceViewProps> = ({
     } else {
       items.forEach((item) => onMarkAttendance(item.studentId, item.status, item.date));
     }
-
-    setFeedback(`Marked all ${classStudents.length} students as ${status} on ${selectedDate}!`);
-    setTimeout(() => setFeedback(null), 3000);
   };
 
   const handleMarkRemainingAbsent = () => {
@@ -137,8 +129,6 @@ export const ManualAttendanceView: React.FC<ManualAttendanceViewProps> = ({
     });
 
     if (itemsToMark.length === 0) {
-      setFeedback('No remaining unmarked students in this class register.');
-      setTimeout(() => setFeedback(null), 3000);
       return;
     }
 
@@ -149,9 +139,6 @@ export const ManualAttendanceView: React.FC<ManualAttendanceViewProps> = ({
     } else {
       itemsToMark.forEach((item) => onMarkAttendance(item.studentId, item.status, item.date));
     }
-
-    setFeedback(`Marked ${itemsToMark.length} remaining student(s) as Absent on ${selectedDate}!`);
-    setTimeout(() => setFeedback(null), 3000);
   };
 
   const handleSaveBatchAttendance = () => {
@@ -176,9 +163,6 @@ export const ManualAttendanceView: React.FC<ManualAttendanceViewProps> = ({
     } else {
       items.forEach((item) => onMarkAttendance(item.studentId, item.status, item.date));
     }
-
-    setFeedback(`Batch register saved and updated for ${items.length} students on ${selectedDate}!`);
-    setTimeout(() => setFeedback(null), 4000);
   };
 
   return (
@@ -225,13 +209,6 @@ export const ManualAttendanceView: React.FC<ManualAttendanceViewProps> = ({
           </div>
         </div>
       </div>
-
-      {feedback && (
-        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-2xl text-xs font-semibold flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{feedback}</span>
-        </div>
-      )}
 
       {/* Class Batch Attendance Table */}
       <div className="bg-[#111] border border-white/5 rounded-3xl p-6 shadow-2xl">
