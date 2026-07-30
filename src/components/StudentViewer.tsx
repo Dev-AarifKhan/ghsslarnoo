@@ -148,7 +148,7 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
     result = result.replace(/oklch\(([^)]+)\)/gi, (match, content) => {
       try {
         const parts = content.trim().split(/[\s\/]+/);
-        if (parts.length < 3) return match;
+        if (parts.length < 3) return 'rgb(15, 23, 42)';
 
         const lStr = parts[0];
         const cStr = parts[1];
@@ -166,7 +166,7 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
           if (isNaN(alpha)) alpha = 1;
         }
 
-        if (isNaN(L) || isNaN(C)) return match;
+        if (isNaN(L) || isNaN(C)) return 'rgb(15, 23, 42)';
 
         // OKLCH to OKLAB
         const rad = (H * Math.PI) / 180;
@@ -196,15 +196,17 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
         const b255 = Math.min(255, Math.max(0, Math.round(b * 255)));
 
         return alpha < 1
-          ? `rgba(${r255}, ${g255}, ${b255}, ${alpha})`
+          ? `rgba(${r255}, ${g255}, ${b255}, ${alpha.toFixed(3)})`
           : `rgb(${r255}, ${g255}, ${b255})`;
       } catch (e) {
-        return match;
+        return 'rgb(15, 23, 42)';
       }
     });
 
-    result = result.replace(/oklab\([^)]+\)/gi, 'rgb(15, 23, 42)');
-    result = result.replace(/color-mix\([^)]+\)/gi, 'rgb(15, 23, 42)');
+    result = result.replace(/oklch\([\s\S]*?\)/gi, 'rgb(15, 23, 42)');
+    result = result.replace(/oklab\([\s\S]*?\)/gi, 'rgb(15, 23, 42)');
+    result = result.replace(/color-mix\([\s\S]*?\)/gi, 'rgb(15, 23, 42)');
+    result = result.replace(/light-dark\([\s\S]*?\)/gi, 'rgb(15, 23, 42)');
 
     return result;
   };
@@ -236,15 +238,6 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
       windowWidth: element.scrollWidth || 800,
       windowHeight: element.scrollHeight || 1000,
       onclone: (clonedDoc, clonedElement) => {
-        // 1. Sanitize all <style> tags in document head/body
-        const styleEls = clonedDoc.querySelectorAll('style');
-        styleEls.forEach((s) => {
-          if (s.textContent && /oklch|oklab|color-mix/i.test(s.textContent)) {
-            s.textContent = convertModernColorFunctions(s.textContent);
-          }
-        });
-
-        // 2. Sanitize element and children
         const targetEl = clonedElement || clonedDoc.querySelector('[data-report-card]') || clonedDoc.body;
         if (targetEl) {
           const targets = [targetEl, ...Array.from(targetEl.querySelectorAll('*'))];
@@ -262,28 +255,78 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
             'stroke',
             'box-shadow',
             'text-shadow',
+            'accent-color',
+            'caret-color',
+            'background',
           ];
 
           targets.forEach((el) => {
             const htmlEl = el as HTMLElement;
-            const styleAttr = htmlEl.getAttribute('style');
-            if (styleAttr && /oklch|oklab|color-mix/i.test(styleAttr)) {
-              htmlEl.setAttribute('style', convertModernColorFunctions(styleAttr));
-            }
 
             try {
               const computed = view.getComputedStyle(el);
               colorProps.forEach((prop) => {
-                const val = computed.getPropertyValue(prop);
-                if (val && typeof val === 'string' && /oklch|oklab|color-mix/i.test(val)) {
-                  htmlEl.style.setProperty(prop, convertModernColorFunctions(val));
+                let val = computed.getPropertyValue(prop);
+                if (val && typeof val === 'string') {
+                  if (/oklch|oklab|color-mix|light-dark/i.test(val)) {
+                    val = convertModernColorFunctions(val);
+                  }
+                  htmlEl.style.setProperty(prop, val);
                 }
               });
             } catch (e) {
-              // Ignore computed style inspect errors
+              // Ignore
+            }
+
+            const styleAttr = htmlEl.getAttribute('style');
+            if (styleAttr && /oklch|oklab|color-mix|light-dark/i.test(styleAttr)) {
+              htmlEl.setAttribute('style', convertModernColorFunctions(styleAttr));
             }
           });
         }
+
+        // Sanitize all style elements
+        clonedDoc.querySelectorAll('style').forEach((styleEl) => {
+          try {
+            if (styleEl.textContent && /oklch|oklab|color-mix|light-dark/i.test(styleEl.textContent)) {
+              styleEl.textContent = convertModernColorFunctions(styleEl.textContent);
+            }
+          } catch (e) {
+            // Ignore
+          }
+        });
+
+        // Sanitize or replace external stylesheets
+        clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach((linkEl) => {
+          try {
+            const sheet = (linkEl as HTMLLinkElement).sheet;
+            if (sheet) {
+              let isClean = true;
+              const rules = Array.from(sheet.cssRules || []);
+              let newCss = '';
+              rules.forEach((rule) => {
+                let txt = rule.cssText;
+                if (/oklch|oklab|color-mix|light-dark/i.test(txt)) {
+                  isClean = false;
+                  txt = convertModernColorFunctions(txt);
+                }
+                newCss += txt + '\n';
+              });
+              if (!isClean) {
+                const newStyle = clonedDoc.createElement('style');
+                newStyle.textContent = newCss;
+                if (linkEl.parentNode) {
+                  linkEl.parentNode.replaceChild(newStyle, linkEl);
+                }
+              }
+            }
+          } catch (e) {
+            // Cross-origin or unreadable stylesheet: remove link element from clone so html2canvas doesn't fail parsing oklch
+            if (linkEl.parentNode) {
+              linkEl.parentNode.removeChild(linkEl);
+            }
+          }
+        });
       },
     });
   };
