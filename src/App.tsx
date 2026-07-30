@@ -488,7 +488,7 @@ export default function App() {
           )}
 
           {activeTab === 'viewer' && (
-            <StudentViewer students={students} attendance={attendance} />
+            <StudentViewer students={students} attendance={attendance} settings={settings} />
           )}
 
           {activeTab === 'reports' && (
