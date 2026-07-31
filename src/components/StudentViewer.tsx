@@ -86,8 +86,7 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
   const totalAbsentAll = studentRecordsAll.filter((r) => r.status === 'Absent').length;
   const totalLateAll = studentRecordsAll.filter((r) => r.status === 'Late').length;
   const totalLeaveAll = studentRecordsAll.filter((r) => r.status === 'Leave').length;
-  const totalOverallRecords = studentRecordsAll.length || 1;
-  const overallPercentage = Math.round(((totalPresentAll + totalLateAll) / totalOverallRecords) * 100);
+  const totalEvaluatedAll = totalPresentAll + totalAbsentAll + totalLateAll + totalLeaveAll;
 
   // Month-specific calculations
   const daysInMonth = new Date(selectedYear, selectedMonthIdx + 1, 0).getDate();
@@ -140,6 +139,14 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
   const workingDaysInMonth = Math.max(1, daysInMonth - totalHolidaysInMonth);
   const totalAttendedMonth = monthPresent + monthLate;
   const monthAttendancePercentage = Math.round((totalAttendedMonth / Math.max(1, monthPresent + monthAbsent + monthLate + monthLeave)) * 100);
+
+  const evaluatedOverallRate = totalEvaluatedAll > 0
+    ? Math.round(((totalPresentAll + totalLateAll) / totalEvaluatedAll) * 100)
+    : 0;
+
+  const overallPercentage = (monthPresent + monthAbsent + monthLate + monthLeave) > 0
+    ? monthAttendancePercentage
+    : evaluatedOverallRate;
 
   // Helper to convert modern CSS color functions (like oklch, oklab, color-mix) into standard rgb/rgba
   const convertModernColorFunctions = (str: string): string => {
