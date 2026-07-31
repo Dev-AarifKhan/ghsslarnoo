@@ -51,6 +51,7 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [previewImageModalUrl, setPreviewImageModalUrl] = useState<string | null>(null);
   const [copiedSummary, setCopiedSummary] = useState(false);
 
   const reportCardRef = useRef<HTMLDivElement>(null);
@@ -279,14 +280,21 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
       useCORS: true,
       allowTaint: true,
       logging: false,
-      backgroundColor: '#0f172a',
+      backgroundColor: '#0b1329',
       scrollX: 0,
       scrollY: 0,
-      windowWidth: element.scrollWidth || 800,
-      windowHeight: element.scrollHeight || 1000,
+      windowWidth: 800,
+      windowHeight: 1100,
       onclone: (clonedDoc, clonedElement) => {
-        const targetEl = clonedElement || clonedDoc.querySelector('[data-report-card]') || clonedDoc.body;
+        const targetEl = (clonedElement || clonedDoc.querySelector('[data-report-card="true"]')) as HTMLElement;
         if (targetEl) {
+          // Enforce desktop layout width in cloned DOM so smartphones capture full 740px wide report card
+          targetEl.style.width = '740px';
+          targetEl.style.minWidth = '740px';
+          targetEl.style.maxWidth = '740px';
+          targetEl.style.boxSizing = 'border-box';
+          targetEl.style.transform = 'none';
+
           const targets = [targetEl, ...Array.from(targetEl.querySelectorAll('*'))];
           const view = clonedDoc.defaultView || window;
           const colorProps = [
@@ -302,8 +310,6 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
             'stroke',
             'box-shadow',
             'text-shadow',
-            'accent-color',
-            'caret-color',
             'background',
           ];
 
@@ -314,11 +320,8 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
               const computed = view.getComputedStyle(el);
               colorProps.forEach((prop) => {
                 let val = computed.getPropertyValue(prop);
-                if (val && typeof val === 'string') {
-                  if (/oklch|oklab|color-mix|light-dark|color\(/i.test(val)) {
-                    val = convertModernColorFunctions(val);
-                  }
-                  htmlEl.style.setProperty(prop, val);
+                if (val && typeof val === 'string' && /oklch|oklab|color-mix|light-dark|color\(/i.test(val)) {
+                  htmlEl.style.setProperty(prop, convertModernColorFunctions(val));
                 }
               });
             } catch (e) {
@@ -335,10 +338,6 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
         // 1. Sanitize all <style> elements
         clonedDoc.querySelectorAll('style').forEach((styleEl) => {
           try {
-            const sheet = styleEl.sheet;
-            if (sheet) {
-              try { sheet.disabled = true; } catch (e) {}
-            }
             if (styleEl.textContent && /oklch|oklab|color-mix|light-dark|color\(/i.test(styleEl.textContent)) {
               styleEl.textContent = convertModernColorFunctions(styleEl.textContent);
             }
@@ -347,12 +346,11 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
           }
         });
 
-        // 2. Sanitize and replace external <link rel="stylesheet"> tags
+        // 2. Sanitize external <link rel="stylesheet"> tags
         clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach((linkEl) => {
           try {
             const sheet = (linkEl as HTMLLinkElement).sheet;
             if (sheet) {
-              try { sheet.disabled = true; } catch (e) {}
               let cssText = '';
               try {
                 const rules = Array.from(sheet.cssRules || []);
@@ -368,48 +366,15 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
                 if (linkEl.parentNode) {
                   linkEl.parentNode.replaceChild(styleEl, linkEl);
                 }
-              } else if (linkEl.parentNode) {
-                linkEl.parentNode.removeChild(linkEl);
               }
-            } else if (linkEl.parentNode) {
-              linkEl.parentNode.removeChild(linkEl);
             }
-          } catch (e) {
-            if (linkEl.parentNode) linkEl.parentNode.removeChild(linkEl);
-          }
+          } catch (e) {}
         });
-
-        // 3. Sanitize or disable remaining live CSSStyleSheets
-        try {
-          Array.from(clonedDoc.styleSheets || []).forEach((sheet) => {
-            try {
-              const rules = Array.from(sheet.cssRules || []);
-              rules.forEach((rule) => {
-                if (rule.cssText && /oklch|oklab|color-mix|light-dark|color\(/i.test(rule.cssText)) {
-                  if ((rule as CSSStyleRule).style) {
-                    const styleRule = rule as CSSStyleRule;
-                    for (let i = 0; i < styleRule.style.length; i++) {
-                      const propName = styleRule.style[i];
-                      const val = styleRule.style.getPropertyValue(propName);
-                      if (val && /oklch|oklab|color-mix|light-dark|color\(/i.test(val)) {
-                        styleRule.style.setProperty(propName, convertModernColorFunctions(val));
-                      }
-                    }
-                  }
-                }
-              });
-            } catch (e) {
-              try { sheet.disabled = true; } catch (err) {}
-            }
-          });
-        } catch (e) {
-          // Ignore
-        }
       },
     });
   };
 
-  // Helper to trigger local computer download via Blob URL
+  // Helper to trigger local file download via Blob URL
   const downloadFileBlob = (blob: Blob, fileName: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -421,10 +386,10 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
     setTimeout(() => {
       if (a.parentNode) document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    }, 1000);
+    }, 2000);
   };
 
-  // Download High Quality PNG directly
+  // Download High Quality PNG directly (Mobile & Desktop compatible)
   const handleDownloadPNG = async () => {
     if (!reportCardRef.current || !selectedStudent) return;
     setIsGenerating(true);
@@ -434,41 +399,77 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
       const canvas = await renderReportToCanvas(reportCardRef.current);
       const safeName = selectedStudent.name.replace(/[^a-zA-Z0-9_-]/g, '_');
       const fileName = `${safeName}_${monthNames[selectedMonthIdx]}_${selectedYear}_Attendance_Report.png`;
+      const dataUrl = canvas.toDataURL('image/png', 1.0);
+
+      const isMobileDevice =
+        ('ontouchstart' in window) ||
+        (navigator.maxTouchPoints > 0) ||
+        /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
       if (canvas.toBlob) {
-        canvas.toBlob((blob) => {
-          if (blob) {
-            downloadFileBlob(blob, fileName);
-          } else {
-            const dataUrl = canvas.toDataURL('image/png', 1.0);
-            const link = document.createElement('a');
-            link.href = dataUrl;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            setTimeout(() => {
-              if (link.parentNode) document.body.removeChild(link);
-            }, 1000);
+        canvas.toBlob(async (blob) => {
+          if (!blob) {
+            if (isMobileDevice) {
+              setPreviewImageModalUrl(dataUrl);
+            } else {
+              const link = document.createElement('a');
+              link.href = dataUrl;
+              link.download = fileName;
+              document.body.appendChild(link);
+              link.click();
+              setTimeout(() => { if (link.parentNode) document.body.removeChild(link); }, 1000);
+            }
+            setIsGenerating(false);
+            return;
           }
+
+          const file = new File([blob], fileName, { type: 'image/png' });
+
+          // On mobile smartphone browsers supporting Web Share API, try share first
+          if (isMobileDevice && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({
+                files: [file],
+                title: `${selectedStudent.name} Monthly Attendance Report`,
+                text: `📊 Attendance Report for ${selectedStudent.name} (${monthNames[selectedMonthIdx]} ${selectedYear})`,
+              });
+              setDownloadMessage('✓ Attendance Report saved/shared successfully!');
+              setTimeout(() => setDownloadMessage(null), 5000);
+              setIsGenerating(false);
+              return;
+            } catch (e) {
+              // Share cancelled or suppressed, fallback to preview modal below
+            }
+          }
+
+          if (!isMobileDevice) {
+            downloadFileBlob(blob, fileName);
+            setDownloadMessage(`✓ Monthly Attendance Report for ${selectedStudent.name} downloaded as PNG!`);
+            setTimeout(() => setDownloadMessage(null), 5000);
+          } else {
+            // Show mobile preview modal with direct image & download button so mobile user can save easily
+            setPreviewImageModalUrl(dataUrl);
+            setDownloadMessage('✓ Monthly Attendance Report PNG generated! Tap and hold image to save.');
+            setTimeout(() => setDownloadMessage(null), 5000);
+          }
+          setIsGenerating(false);
         }, 'image/png', 0.95);
       } else {
-        const dataUrl = canvas.toDataURL('image/png', 1.0);
-        const link = document.createElement('a');
-        link.href = dataUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          if (link.parentNode) document.body.removeChild(link);
-        }, 1000);
+        if (isMobileDevice) {
+          setPreviewImageModalUrl(dataUrl);
+        } else {
+          const link = document.createElement('a');
+          link.href = dataUrl;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          setTimeout(() => { if (link.parentNode) document.body.removeChild(link); }, 1000);
+        }
+        setIsGenerating(false);
       }
-
-      setDownloadMessage(`✓ Monthly Attendance Report for ${selectedStudent.name} downloaded as PNG!`);
-      setTimeout(() => setDownloadMessage(null), 5000);
     } catch (err: any) {
       console.error('PNG download error:', err);
       alert(`An error occurred while generating PNG: ${err?.message || 'Please try again.'}`);
-    } finally {
       setIsGenerating(false);
     }
   };
@@ -918,57 +919,57 @@ Verified by Smart Student Attendance System.`;
                   <div
                     ref={reportCardRef}
                     data-report-card="true"
-                    className="w-full min-w-[340px] max-w-[720px] mx-auto bg-slate-900 border-2 border-slate-800 rounded-3xl p-6 sm:p-8 text-white shadow-2xl space-y-6 font-sans relative overflow-hidden"
+                    className="w-full min-w-[340px] max-w-[740px] mx-auto bg-[#0b1329] border-2 border-[#1e2d4a] rounded-3xl p-6 sm:p-8 text-white shadow-2xl space-y-6 font-sans relative overflow-hidden"
                   >
                     {/* Decorative Top Accent Bar */}
-                    <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500" />
+                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500" />
 
                     {/* Report Card Header */}
-                    <div className="flex items-start justify-between border-b border-slate-800 pb-5">
+                    <div className="flex items-center justify-between border-b border-[#1e2d4a] pb-5 gap-3">
                       <div className="flex items-center gap-3.5">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-lg shrink-0">
+                        <div className="w-12 h-12 rounded-2xl bg-[#0e9f6e] flex items-center justify-center text-white shadow-lg shrink-0">
                           <School className="w-6 h-6" />
                         </div>
                         <div>
                           <h2 className="text-base sm:text-lg font-black tracking-tight text-white uppercase">
-                            {settings?.schoolName || 'Govt. Vocational Higher Secondary School'}
+                            {settings?.schoolName || 'GOVT. HIGHER SECONDARY SCHOOL LARNOO'}
                           </h2>
-                          <p className="text-[11px] text-emerald-400 font-bold uppercase tracking-wider">
-                            Department of School Education • Monthly Attendance Report
+                          <p className="text-xs text-[#34d399] font-black uppercase tracking-wider mt-0.5">
+                            DEPARTMENT OF SCHOOL EDUCATION • MONTHLY ATTENDANCE REPORT
                           </p>
                         </div>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <span className="inline-block px-3 py-1 bg-slate-800 border border-slate-700 rounded-full text-xs font-black text-amber-300 font-mono">
+                        <span className="inline-block px-4 py-1.5 bg-[#0e1f38] border border-[#1d3863] rounded-full text-xs font-black text-[#60a5fa] font-sans">
                           {monthNames[selectedMonthIdx]} {selectedYear}
                         </span>
                       </div>
                     </div>
 
                     {/* Student Info Box */}
-                    <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4 justify-between">
-                      <div className="flex items-center gap-3.5 w-full sm:w-auto">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-md shrink-0 border border-white/20">
+                    <div className="bg-[#0e192e] border border-[#1d2f4d] rounded-2xl p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-2xl font-black shadow-md shrink-0 border border-white/20">
                           {selectedStudent.name.charAt(0)}
                         </div>
                         <div>
-                          <h3 className="text-base font-extrabold text-white">{selectedStudent.name}</h3>
-                          <p className="text-xs text-slate-300">
-                            Parentage: <strong className="text-slate-100">{selectedStudent.parentage || 'N/A'}</strong>
+                          <h3 className="text-lg font-black text-white tracking-tight">{selectedStudent.name}</h3>
+                          <p className="text-xs text-slate-300 font-medium">
+                            Parentage: <strong className="text-slate-100 font-bold">{selectedStudent.parentage || 'N/A'}</strong>
                           </p>
-                          <p className="text-xs text-slate-400">
-                            Subject/Stream: {selectedStudent.stream || settings?.subjectName || 'Vocational Education'}
+                          <p className="text-xs text-slate-400 font-medium">
+                            Subject/Stream: {selectedStudent.stream || settings?.subjectName || 'Vocational Subject: IT / ITES'}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-700/60 font-mono text-xs gap-1">
-                        <div className="bg-slate-900/90 px-3 py-1 rounded-xl border border-slate-700 text-slate-200">
-                          ID: <strong className="text-cyan-300">{selectedStudent.id}</strong>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0 font-mono text-xs">
+                        <div className="bg-[#0a1224] border border-[#1b3254] px-3.5 py-1 rounded-full text-[#38bdf8] font-bold">
+                          ID: <strong>{selectedStudent.id}</strong>
                         </div>
-                        <div className="bg-slate-900/90 px-3 py-1 rounded-xl border border-slate-700 text-slate-200">
-                          Class: <strong className="text-emerald-300">{selectedStudent.className}</strong>
+                        <div className="bg-[#0a1224] border border-[#1b3254] px-3.5 py-1 rounded-full text-[#34d399] font-bold">
+                          Class: <strong>{selectedStudent.className}</strong>
                         </div>
                       </div>
                     </div>
@@ -976,42 +977,42 @@ Verified by Smart Student Attendance System.`;
                     {/* Color-Coded Calendar Title & Legend */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <Calendar className="w-4 h-4 text-emerald-400" />
-                          Attendance Calendar Grid ({monthNames[selectedMonthIdx]})
+                        <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <Calendar className="w-4 h-4 text-[#34d399]" />
+                          ATTENDANCE CALENDAR GRID ({monthNames[selectedMonthIdx].toUpperCase()})
                         </h4>
                       </div>
 
                       {/* Color-Coded Status Legend */}
-                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-[10px] font-bold">
-                        <div className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-emerald-500 text-white rounded-xl shadow-sm">
-                          <span className="w-2 h-2 rounded-full bg-white" />
+                      <div className="grid grid-cols-5 gap-2 text-xs font-black">
+                        <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-[#0e9f6e] text-white rounded-full shadow-sm text-[11px]">
+                          <span className="w-2 h-2 rounded-full bg-white shrink-0" />
                           <span>Green = Present</span>
                         </div>
-                        <div className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-rose-500 text-white rounded-xl shadow-sm">
-                          <span className="w-2 h-2 rounded-full bg-white" />
+                        <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-[#e02424] text-white rounded-full shadow-sm text-[11px]">
+                          <span className="w-2 h-2 rounded-full bg-white shrink-0" />
                           <span>Red = Absent</span>
                         </div>
-                        <div className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-amber-400 text-slate-950 rounded-xl shadow-sm">
-                          <span className="w-2 h-2 rounded-full bg-slate-950" />
+                        <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-[#e3a008] text-slate-950 rounded-full shadow-sm text-[11px]">
+                          <span className="w-2 h-2 rounded-full bg-slate-950 shrink-0" />
                           <span>Yellow = Late</span>
                         </div>
-                        <div className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-blue-500 text-white rounded-xl shadow-sm">
-                          <span className="w-2 h-2 rounded-full bg-white" />
+                        <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-[#1a56db] text-white rounded-full shadow-sm text-[11px]">
+                          <span className="w-2 h-2 rounded-full bg-white shrink-0" />
                           <span>Blue = Leave</span>
                         </div>
-                        <div className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-pink-500 text-white rounded-xl shadow-sm col-span-3 sm:col-span-1">
-                          <span className="w-2 h-2 rounded-full bg-white" />
+                        <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-[#e74694] text-white rounded-full shadow-sm text-[11px]">
+                          <span className="w-2 h-2 rounded-full bg-white shrink-0" />
                           <span>Pink = Holiday</span>
                         </div>
                       </div>
 
                       {/* 7-Column Days Grid */}
-                      <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-2xl space-y-2">
+                      <div className="bg-[#0a1122]/90 border border-[#1d2f4d] p-3.5 rounded-2xl space-y-2">
                         {/* Weekday Labels */}
                         <div className="grid grid-cols-7 gap-1.5">
                           {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((d) => (
-                            <div key={d} className="text-center text-[10px] font-black text-slate-400 uppercase py-1">
+                            <div key={d} className="text-center text-xs font-black text-slate-400 uppercase py-1">
                               {d}
                             </div>
                           ))}
@@ -1021,41 +1022,41 @@ Verified by Smart Student Attendance System.`;
                         <div className="grid grid-cols-7 gap-1.5">
                           {/* Empty offset padding */}
                           {Array.from({ length: firstDayOfWeek }).map((_, idx) => (
-                            <div key={`pad-${idx}`} className="h-11 rounded-xl bg-slate-900/30 border border-slate-800/40" />
+                            <div key={`pad-${idx}`} className="h-14 rounded-2xl bg-[#0d1629]/50 border border-[#182845]" />
                           ))}
 
                           {monthCalendarDays.map((cd) => {
                             const status = cd.effectiveStatus;
-                            let bgStyle = 'bg-slate-800/40 border-slate-700/60 text-slate-400';
-                            let labelText = '';
+                            let cellClass = 'bg-[#0d1629] border-[#1e2d4a] text-slate-400';
+                            let badgeText = '—';
 
                             if (status === 'Present') {
-                              bgStyle = 'bg-emerald-500 text-white border-emerald-400 font-extrabold shadow-md';
-                              labelText = 'P';
+                              cellClass = 'bg-[#0e9f6e] text-white border-[#34d399] font-black shadow-md';
+                              badgeText = 'P';
                             } else if (status === 'Absent') {
-                              bgStyle = 'bg-rose-500 text-white border-rose-400 font-extrabold shadow-md';
-                              labelText = 'A';
+                              cellClass = 'bg-[#e02424] text-white border-[#f87171] font-black shadow-md';
+                              badgeText = 'A';
                             } else if (status === 'Late') {
-                              bgStyle = 'bg-amber-400 text-slate-950 border-amber-300 font-extrabold shadow-md';
-                              labelText = 'L';
+                              cellClass = 'bg-[#e3a008] text-slate-950 border-[#facc15] font-black shadow-md';
+                              badgeText = 'L';
                             } else if (status === 'Leave') {
-                              bgStyle = 'bg-blue-500 text-white border-blue-400 font-extrabold shadow-md';
-                              labelText = 'LV';
+                              cellClass = 'bg-[#1a56db] text-white border-[#60a5fa] font-black shadow-md';
+                              badgeText = 'LV';
                             } else if (status === 'Holiday') {
-                              bgStyle = 'bg-pink-500 text-white border-pink-400 font-extrabold shadow-md';
-                              labelText = cd.isSunday ? 'SUN' : 'HOL';
+                              cellClass = 'bg-[#e74694] text-white border-[#f472b6] font-black shadow-md';
+                              badgeText = cd.isSunday ? 'SUN' : 'HOL';
                             }
 
                             return (
                               <div
                                 key={cd.dayNum}
-                                className={`h-11 rounded-xl p-1 flex flex-col justify-between border transition-all text-center ${bgStyle}`}
+                                className={`h-14 rounded-2xl p-1.5 flex flex-col justify-between border text-center ${cellClass}`}
                               >
-                                <span className="text-[9px] font-bold opacity-80 self-start leading-none pl-0.5 pt-0.5">
+                                <span className="text-[10px] font-bold opacity-90 self-start leading-none pl-0.5 pt-0.5">
                                   {cd.dayNum}
                                 </span>
-                                <span className="text-[10px] font-black uppercase tracking-tighter pb-0.5">
-                                  {labelText || '—'}
+                                <span className="text-[11px] font-black uppercase tracking-tighter pb-0.5">
+                                  {badgeText}
                                 </span>
                               </div>
                             );
@@ -1066,58 +1067,58 @@ Verified by Smart Student Attendance System.`;
 
                     {/* Attendance Monthly Summary Box */}
                     <div className="space-y-3">
-                      <h4 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
-                        Attendance Summary ({monthNames[selectedMonthIdx]})
+                      <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">
+                        ATTENDANCE SUMMARY ({monthNames[selectedMonthIdx].toUpperCase()})
                       </h4>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                        <div className="bg-slate-800/80 border border-emerald-500/30 p-2.5 rounded-2xl text-center">
-                          <span className="text-[10px] text-emerald-400 uppercase font-black">Present</span>
-                          <p className="text-lg font-black text-emerald-400">{monthPresent}</p>
+                      <div className="grid grid-cols-5 gap-2.5">
+                        <div className="bg-[#0e192e] border border-[#0e9f6e]/50 p-3 rounded-2xl text-center">
+                          <span className="text-[10px] text-[#34d399] uppercase font-black tracking-wider">PRESENT</span>
+                          <p className="text-2xl font-black text-[#34d399] mt-1">{monthPresent}</p>
                         </div>
 
-                        <div className="bg-slate-800/80 border border-rose-500/30 p-2.5 rounded-2xl text-center">
-                          <span className="text-[10px] text-rose-400 uppercase font-black">Absent</span>
-                          <p className="text-lg font-black text-rose-400">{monthAbsent}</p>
+                        <div className="bg-[#0e192e] border border-[#e02424]/50 p-3 rounded-2xl text-center">
+                          <span className="text-[10px] text-[#f87171] uppercase font-black tracking-wider">ABSENT</span>
+                          <p className="text-2xl font-black text-[#f87171] mt-1">{monthAbsent}</p>
                         </div>
 
-                        <div className="bg-slate-800/80 border border-amber-500/30 p-2.5 rounded-2xl text-center">
-                          <span className="text-[10px] text-amber-400 uppercase font-black">Late</span>
-                          <p className="text-lg font-black text-amber-400">{monthLate}</p>
+                        <div className="bg-[#0e192e] border border-[#e3a008]/50 p-3 rounded-2xl text-center">
+                          <span className="text-[10px] text-[#facc15] uppercase font-black tracking-wider">LATE</span>
+                          <p className="text-2xl font-black text-[#facc15] mt-1">{monthLate}</p>
                         </div>
 
-                        <div className="bg-slate-800/80 border border-blue-500/30 p-2.5 rounded-2xl text-center">
-                          <span className="text-[10px] text-blue-400 uppercase font-black">Leave</span>
-                          <p className="text-lg font-black text-blue-400">{monthLeave}</p>
+                        <div className="bg-[#0e192e] border border-[#1a56db]/50 p-3 rounded-2xl text-center">
+                          <span className="text-[10px] text-[#60a5fa] uppercase font-black tracking-wider">LEAVE</span>
+                          <p className="text-2xl font-black text-[#60a5fa] mt-1">{monthLeave}</p>
                         </div>
 
-                        <div className="bg-slate-800/80 border border-pink-500/30 p-2.5 rounded-2xl text-center col-span-2 sm:col-span-1">
-                          <span className="text-[10px] text-pink-400 uppercase font-black">Holidays</span>
-                          <p className="text-lg font-black text-pink-400">{totalHolidaysInMonth}</p>
+                        <div className="bg-[#0e192e] border border-[#e74694]/50 p-3 rounded-2xl text-center">
+                          <span className="text-[10px] text-[#f472b6] uppercase font-black tracking-wider">HOLIDAYS</span>
+                          <p className="text-2xl font-black text-[#f472b6] mt-1">{totalHolidaysInMonth}</p>
                         </div>
                       </div>
 
-                      {/* Score Banner */}
-                      <div className="bg-slate-800 border border-slate-700/80 p-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-md ${
-                            monthAttendancePercentage >= 75 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+                      {/* Percentage Banner */}
+                      <div className="bg-[#0e192e] border border-[#1d2f4d] p-4 rounded-2xl flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3.5">
+                          <div className={`px-3.5 py-2 rounded-2xl flex items-center justify-center font-black text-base text-white shadow-md ${
+                            monthAttendancePercentage >= 75 ? 'bg-[#0e9f6e]' : 'bg-[#e02424]'
                           }`}>
                             {monthAttendancePercentage}%
                           </div>
                           <div>
-                            <p className="text-xs font-extrabold text-white">Monthly Attendance Percentage</p>
-                            <p className="text-[11px] text-slate-300">
-                              Working Days Evaluated: <strong>{workingDaysInMonth} Days</strong>
+                            <p className="text-xs font-black text-white">Monthly Attendance Percentage</p>
+                            <p className="text-[11px] text-slate-300 font-medium">
+                              Working Days Evaluated: <strong className="text-slate-100">{workingDaysInMonth} Days</strong>
                             </p>
                           </div>
                         </div>
 
                         <div className="shrink-0">
-                          <span className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border shadow-sm ${
+                          <span className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider border shadow-sm ${
                             monthAttendancePercentage >= 75
-                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
-                              : 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                              ? 'bg-[#0e9f6e]/15 border-[#0e9f6e]/60 text-[#34d399]'
+                              : 'bg-[#e02424]/15 border-[#e02424]/60 text-[#f87171]'
                           }`}>
                             {monthAttendancePercentage >= 75 ? '✓ SATISFACTORY / ELIGIBLE' : '⚠️ ATTENTION REQUIRED'}
                           </span>
@@ -1126,20 +1127,20 @@ Verified by Smart Student Attendance System.`;
                     </div>
 
                     {/* Report Card Footer / Stamp Placeholder */}
-                    <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-slate-400">
+                    <div className="pt-4 border-t border-[#1d2f4d] flex items-center justify-between gap-4 text-[10px] text-slate-400">
                       <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <ShieldCheck className="w-4 h-4 text-[#34d399] shrink-0" />
                         <span>Verified Official Document • Smart Attendance Portal</span>
                       </div>
 
                       <div className="flex items-center gap-6">
                         <div className="text-center">
-                          <div className="w-24 border-b border-slate-600 mb-0.5" />
-                          <span className="text-[9px] uppercase font-bold text-slate-400">Class Teacher</span>
+                          <div className="w-24 border-b border-slate-600 mb-1" />
+                          <span className="text-[9px] uppercase font-bold text-slate-400">CLASS TEACHER</span>
                         </div>
                         <div className="text-center">
-                          <div className="w-24 border-b border-slate-600 mb-0.5" />
-                          <span className="text-[9px] uppercase font-bold text-slate-400">Principal Stamp</span>
+                          <div className="w-24 border-b border-slate-600 mb-1" />
+                          <span className="text-[9px] uppercase font-bold text-slate-400">PRINCIPAL STAMP</span>
                         </div>
                       </div>
                     </div>
@@ -1218,6 +1219,58 @@ Verified by Smart Student Attendance System.`;
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* SMARTPHONE PREVIEW IMAGE MODAL */}
+      {previewImageModalUrl && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#0b1329] border border-[#1e2d4a] rounded-3xl p-6 max-w-lg w-full text-white shadow-2xl space-y-4 my-auto">
+            <div className="flex items-center justify-between border-b border-[#1e2d4a] pb-3">
+              <h3 className="text-base font-bold flex items-center gap-2 text-[#34d399]">
+                <FileImage className="w-5 h-5" />
+                Attendance Report PNG Ready
+              </h3>
+              <button
+                onClick={() => setPreviewImageModalUrl(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              📱 <strong>Smartphone instructions:</strong> Tap & hold the image below to <strong>Save to Photos / Gallery</strong>, or tap the button below to download or share via WhatsApp.
+            </p>
+
+            <div className="border border-[#1e2d4a] rounded-2xl overflow-hidden bg-slate-950 max-h-[60vh] overflow-y-auto p-1.5 flex items-center justify-center">
+              <img
+                src={previewImageModalUrl}
+                alt="Generated Attendance Report PNG"
+                className="w-full h-auto object-contain rounded-xl shadow-lg"
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
+              <a
+                href={previewImageModalUrl}
+                download={`${selectedStudent?.name?.replace(/\s+/g, '_') || 'Student'}_Attendance_Report.png`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 px-4 bg-[#0e9f6e] hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Download className="w-4 h-4" />
+                <span>Save / Download PNG Image</span>
+              </a>
+
+              <button
+                onClick={() => setPreviewImageModalUrl(null)}
+                className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
