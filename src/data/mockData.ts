@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   enableAudio: true,
   disableScreenshots: false,
   encryptLocalDatabase: true,
+  lowAttendanceThreshold: 75,
 };
 
 export const INITIAL_STUDENTS: Student[] = [];

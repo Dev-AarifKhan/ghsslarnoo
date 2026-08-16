@@ -81,12 +81,13 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
     (r) => r.studentId.toLowerCase() === selectedStudent?.id.toLowerCase()
   );
 
-  // Overall student stats
+  // Overall student stats - Working days = Present + Absent (omitting holidays)
   const totalPresentAll = studentRecordsAll.filter((r) => r.status === 'Present').length;
+  const totalHolidayAll = studentRecordsAll.filter((r) => r.status === 'Holiday').length;
   const totalAbsentAll = studentRecordsAll.filter((r) => r.status === 'Absent').length;
   const totalLateAll = studentRecordsAll.filter((r) => r.status === 'Late').length;
   const totalLeaveAll = studentRecordsAll.filter((r) => r.status === 'Leave').length;
-  const totalEvaluatedAll = totalPresentAll + totalAbsentAll + totalLateAll + totalLeaveAll;
+  const totalWorkingDaysAll = totalPresentAll + totalAbsentAll;
 
   // Month-specific calculations
   const daysInMonth = new Date(selectedYear, selectedMonthIdx + 1, 0).getDate();
@@ -133,18 +134,19 @@ export const StudentViewer: React.FC<StudentViewerProps> = ({
     };
   });
 
-  // Calculate totals including Sundays as Holidays if not explicitly marked
+  // Calculate totals: working days only consider present and absent days (omitting holidays & Sundays)
   const totalSundaysInMonth = monthCalendarDays.filter((d) => d.isSunday && !d.record).length;
   const totalHolidaysInMonth = monthHoliday + totalSundaysInMonth;
-  const workingDaysInMonth = Math.max(1, daysInMonth - totalHolidaysInMonth);
-  const totalAttendedMonth = monthPresent + monthLate;
-  const monthAttendancePercentage = Math.round((totalAttendedMonth / Math.max(1, monthPresent + monthAbsent + monthLate + monthLeave)) * 100);
-
-  const evaluatedOverallRate = totalEvaluatedAll > 0
-    ? Math.round(((totalPresentAll + totalLateAll) / totalEvaluatedAll) * 100)
+  const workingDaysInMonth = monthPresent + monthAbsent;
+  const monthAttendancePercentage = workingDaysInMonth > 0
+    ? Math.min(100, Math.round((monthPresent / workingDaysInMonth) * 100))
     : 0;
 
-  const overallPercentage = (monthPresent + monthAbsent + monthLate + monthLeave) > 0
+  const evaluatedOverallRate = totalWorkingDaysAll > 0
+    ? Math.min(100, Math.round((totalPresentAll / totalWorkingDaysAll) * 100))
+    : 0;
+
+  const overallPercentage = workingDaysInMonth > 0
     ? monthAttendancePercentage
     : evaluatedOverallRate;
 

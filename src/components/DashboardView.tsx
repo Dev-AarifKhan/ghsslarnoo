@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Users,
   CheckCircle,
@@ -9,7 +9,6 @@ import {
   ClipboardList,
   FileText,
   RefreshCw,
-  AlertTriangle,
   TrendingUp,
   Calendar,
   Sparkles,
@@ -23,6 +22,8 @@ interface DashboardViewProps {
   settings: AppSettings;
   onSelectTab: (tab: string) => void;
   onSync: () => void;
+  onSaveSettings?: (settings: AppSettings) => void;
+  onUpdateStudent?: (student: Student) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -37,9 +38,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const localTodayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const utcTodayStr = now.toISOString().split('T')[0];
 
-  const [selectedComparisonDate, setSelectedComparisonDate] = React.useState<string>(localTodayStr);
+  const [selectedComparisonDate, setSelectedComparisonDate] = useState<string>(localTodayStr);
 
-  // Helper to normalize class name variations (e.g., '10th', 'Class 10th', '10', 'Class 10 - IT') to 'Class 9', 'Class 10', 'Class 11', 'Class 12'
+  const lowThreshold = settings.lowAttendanceThreshold ?? 75;
+
+  // Helper to normalize class name variations
   const normalizeClassName = (rawClass: string | undefined | null): string => {
     if (!rawClass) return '';
     const classStr = String(rawClass).trim().toLowerCase();
@@ -95,7 +98,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return false;
   };
 
-  const isTodayRecord = (r: AttendanceRecord): boolean => isMatchDate(r, localTodayStr) || isMatchDate(r, utcTodayStr);
+  const isTodayRecord = (r: AttendanceRecord): boolean =>
+    isMatchDate(r, localTodayStr) || isMatchDate(r, utcTodayStr);
 
   // Filter & deduplicate records for selected comparison date per student
   const comparisonStudentMap = new Map<string, AttendanceRecord>();
@@ -118,6 +122,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   let absentCount = 0;
   let lateCount = 0;
   let leaveCount = 0;
+  let holidayCount = 0;
 
   const processedStudentIds = new Set<string>();
 
@@ -129,44 +134,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       const st = String(rec.status || '').trim().toLowerCase();
       if (st === 'present' || st === 'p') {
         presentCount++;
+      } else if (st === 'absent' || st === 'a') {
+        absentCount++;
       } else if (st === 'late' || st === 'l') {
         lateCount++;
       } else if (st === 'leave' || st === 'excused' || st === 'lv') {
         leaveCount++;
-      } else {
-        absentCount++;
+      } else if (st === 'holiday' || st === 'h') {
+        holidayCount++;
       }
     } else {
-      // Enrolled student with no attendance record on selected date -> Absent / Unmarked
       absentCount++;
     }
   });
 
-  // Include any extra attendance records on that date for student IDs not in uniqueStudents
   comparisonStudentMap.forEach((rec, cleanId) => {
     if (!processedStudentIds.has(cleanId)) {
       const st = String(rec.status || '').trim().toLowerCase();
       if (st === 'present' || st === 'p') {
         presentCount++;
+      } else if (st === 'absent' || st === 'a') {
+        absentCount++;
       } else if (st === 'late' || st === 'l') {
         lateCount++;
       } else if (st === 'leave' || st === 'excused' || st === 'lv') {
         leaveCount++;
-      } else {
-        absentCount++;
+      } else if (st === 'holiday' || st === 'h') {
+        holidayCount++;
       }
     }
   });
 
-  const totalEvaluated = Math.max(
-    totalEnrolled,
-    presentCount + absentCount + lateCount + leaveCount
-  );
-  const totalDivisor = totalEvaluated > 0 ? totalEvaluated : 1;
-  const attendancePercentage = Math.min(
-    100,
-    Math.round(((presentCount + lateCount) / totalDivisor) * 100)
-  );
+  const totalWorkingEvaluated = presentCount + absentCount;
+  const attendancePercentage = totalWorkingEvaluated > 0
+    ? Math.min(100, Math.round((presentCount / totalWorkingEvaluated) * 100))
+    : 0;
 
   // 5. Class breakdown for Class 9, Class 10, Class 11, Class 12 on selected date
   const classes = ['Class 9', 'Class 10', 'Class 11', 'Class 12'] as const;
@@ -179,6 +181,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     let cAbsent = 0;
     let cLate = 0;
     let cLeave = 0;
+    let cHoliday = 0;
 
     const classStudentIds = new Set<string>();
 
@@ -190,20 +193,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const st = String(rec.status || '').trim().toLowerCase();
         if (st === 'present' || st === 'p') {
           cPresent++;
+        } else if (st === 'absent' || st === 'a') {
+          cAbsent++;
         } else if (st === 'late' || st === 'l') {
           cLate++;
         } else if (st === 'leave' || st === 'excused' || st === 'lv') {
           cLeave++;
-        } else {
-          cAbsent++;
+        } else if (st === 'holiday' || st === 'h') {
+          cHoliday++;
         }
       } else {
-        // Enrolled student in this class with no record on selected date -> Absent
         cAbsent++;
       }
     });
 
-    // Check for extra records belonging to this class not in classStudents
     comparisonStudentMap.forEach((rec, cleanId) => {
       if (!classStudentIds.has(cleanId)) {
         const rClass = normalizeClassName(rec.className);
@@ -211,38 +214,86 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           const st = String(rec.status || '').trim().toLowerCase();
           if (st === 'present' || st === 'p') {
             cPresent++;
+          } else if (st === 'absent' || st === 'a') {
+            cAbsent++;
           } else if (st === 'late' || st === 'l') {
             cLate++;
           } else if (st === 'leave' || st === 'excused' || st === 'lv') {
             cLeave++;
-          } else {
-            cAbsent++;
+          } else if (st === 'holiday' || st === 'h') {
+            cHoliday++;
           }
         }
       }
     });
 
-    const totalInClass = Math.max(classStudents.length, cPresent + cAbsent + cLate + cLeave);
-    const totalPresent = cPresent + cLate;
-    const pct = totalInClass > 0 ? Math.min(100, Math.round((totalPresent / totalInClass) * 100)) : 0;
+    const totalWorkingInClass = cPresent + cAbsent;
+    const pct =
+      totalWorkingInClass > 0 ? Math.min(100, Math.round((cPresent / totalWorkingInClass) * 100)) : 0;
 
     return {
       className: cName,
-      total: totalInClass,
-      present: totalPresent,
+      total: totalWorkingInClass || classStudents.length,
+      present: cPresent,
       absent: cAbsent,
       leave: cLeave,
       percentage: pct,
     };
   });
 
-  // 6. Recent scans (sorted by timestamp descending)
+  // 6. Calculate At-Risk Students Count for Quick Alert Card & KPI
+  let atRiskCount = 0;
+  let criticalCount = 0;
+
+  uniqueStudents.forEach((s) => {
+    const cleanId = s.id.trim().toUpperCase();
+    const records = (attendance || []).filter(
+      (r) => r.studentId && r.studentId.trim().toUpperCase() === cleanId
+    );
+
+    const dateMap = new Map<string, AttendanceRecord>();
+    records.forEach((r) => {
+      const d = r.date || (r.timestamp ? new Date(r.timestamp).toISOString().split('T')[0] : '');
+      if (d) {
+        const existing = dateMap.get(d);
+        if (!existing || (r.timestamp || 0) >= (existing.timestamp || 0)) {
+          dateMap.set(d, r);
+        }
+      }
+    });
+
+    let p = 0;
+    let a = 0;
+    let l = 0;
+    let lv = 0;
+    let h = 0;
+
+    dateMap.forEach((rec) => {
+      const st = String(rec.status || '').trim().toLowerCase();
+      if (st === 'present' || st === 'p') p++;
+      else if (st === 'absent' || st === 'a') a++;
+      else if (st === 'late' || st === 'l') l++;
+      else if (st === 'leave' || st === 'excused' || st === 'lv') lv++;
+      else if (st === 'holiday' || st === 'h') h++;
+    });
+
+    const tot = p + a;
+    if (tot > 0) {
+      const pct = Math.round((p / tot) * 100);
+      if (pct < lowThreshold) {
+        atRiskCount++;
+        if (pct < 50) criticalCount++;
+      }
+    }
+  });
+
+  // Recent scans (sorted by timestamp descending)
   const recentScans = [...(attendance || [])]
     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
     .slice(0, 6);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       {/* Top Banner & Quick Status */}
       <div className="bg-[#111] border border-white/5 rounded-3xl p-6 sm:p-8 text-white shadow-2xl relative overflow-hidden group">
         <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/10 via-transparent to-cyan-900/5 pointer-events-none" />
@@ -252,10 +303,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
               <span>Vocational Education • IT / ITES Division</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-serif italic text-white tracking-tight">Attendance Dashboard</h1>
-            <p className="text-xs text-gray-400 mt-1">
-              {settings.schoolName}
-            </p>
+            <h1 className="text-2xl sm:text-3xl font-serif italic text-white tracking-tight">
+              Attendance Dashboard
+            </h1>
+            <p className="text-xs text-gray-400 mt-1">{settings.schoolName}</p>
             <p className="text-xs text-gray-400 mt-0.5">
               Instructor: <span className="text-white font-medium">{settings.teacherName}</span>
             </p>
@@ -275,7 +326,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               disabled={syncStatus.isSyncing}
               className="flex items-center space-x-2 bg-[#1a1a1a] hover:bg-white/10 text-gray-200 border border-white/10 font-medium px-4 py-3 rounded-xl transition-all text-xs"
             >
-              <RefreshCw className={`w-4 h-4 ${syncStatus.isSyncing ? 'animate-spin text-cyan-400' : ''}`} />
+              <RefreshCw
+                className={`w-4 h-4 ${syncStatus.isSyncing ? 'animate-spin text-cyan-400' : ''}`}
+              />
               <span className="hidden sm:inline">Sync Sheets</span>
             </button>
           </div>
@@ -283,57 +336,71 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Primary KPI Metrics Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-[#111] border border-white/5 rounded-2xl p-5 shadow-xl">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {/* Total Enrolled */}
+        <div className="bg-[#111] border border-white/5 rounded-2xl p-4 sm:p-5 shadow-xl">
           <div className="flex items-center justify-between text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-2">
             <span>Total Enrolled</span>
             <Users className="w-4 h-4 text-cyan-400" />
           </div>
-          <p className="text-3xl font-serif text-white">{totalEnrolled}</p>
+          <p className="text-2xl sm:text-3xl font-serif text-white">{totalEnrolled}</p>
           <span className="text-[10px] text-gray-500 mt-1 block">Vocational IT Students</span>
         </div>
 
-        <div className="bg-[#111] border border-white/5 rounded-2xl p-5 shadow-xl">
+        {/* Present */}
+        <div className="bg-[#111] border border-white/5 rounded-2xl p-4 sm:p-5 shadow-xl">
           <div className="flex items-center justify-between text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-2">
-            <span>{selectedComparisonDate === localTodayStr ? "Today's Present" : "Present"}</span>
+            <span>{selectedComparisonDate === localTodayStr ? "Today's Present" : 'Present'}</span>
             <CheckCircle className="w-4 h-4 text-emerald-400" />
           </div>
-          <p className="text-3xl font-serif text-emerald-400">{presentCount}</p>
-          <span className="text-[10px] text-emerald-400/80 font-bold mt-1 block">{attendancePercentage}% Attendance Rate</span>
+          <p className="text-2xl sm:text-3xl font-serif text-emerald-400">{presentCount}</p>
+          <span className="text-[10px] text-emerald-400/80 font-bold mt-1 block">
+            {attendancePercentage}% Attendance Rate
+          </span>
         </div>
 
-        <div className="bg-[#111] border border-white/5 rounded-2xl p-5 shadow-xl">
+        {/* Absent */}
+        <div className="bg-[#111] border border-white/5 rounded-2xl p-4 sm:p-5 shadow-xl">
           <div className="flex items-center justify-between text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-2">
-            <span>{selectedComparisonDate === localTodayStr ? "Today's Absent" : "Absent"}</span>
+            <span>{selectedComparisonDate === localTodayStr ? "Today's Absent" : 'Absent'}</span>
             <XCircle className="w-4 h-4 text-rose-400" />
           </div>
-          <p className="text-3xl font-serif text-rose-400">{absentCount}</p>
-          <span className="text-[10px] text-rose-400/80 font-bold mt-1 block">Absent / Unmarked</span>
+          <p className="text-2xl sm:text-3xl font-serif text-rose-400">{absentCount}</p>
+          <span className="text-[10px] text-rose-400/80 font-bold mt-1 block">
+            Absent / Unmarked
+          </span>
         </div>
 
-        <div className="bg-[#111] border border-white/5 rounded-2xl p-5 shadow-xl">
+        {/* Late / Leave */}
+        <div className="bg-[#111] border border-white/5 rounded-2xl p-4 sm:p-5 shadow-xl">
           <div className="flex items-center justify-between text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-2">
             <span>Late / Leave</span>
             <Clock className="w-4 h-4 text-amber-400" />
           </div>
-          <p className="text-3xl font-serif text-amber-400">{lateCount + leaveCount}</p>
-          <span className="text-[10px] text-gray-500 mt-1 block">Late: {lateCount} | Leave: {leaveCount}</span>
+          <p className="text-2xl sm:text-3xl font-serif text-amber-400">{lateCount + leaveCount}</p>
+          <span className="text-[10px] text-gray-500 mt-1 block">
+            Late: {lateCount} | Leave: {leaveCount}
+          </span>
         </div>
 
-        <div className="col-span-2 lg:col-span-1 bg-[#111] border border-white/5 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+        {/* Sync Status */}
+        <div className="bg-[#111] border border-white/5 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-1">
-            <span>Sheets Sync</span>
+            <span>Cloud Sync</span>
             <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
           </div>
           <p className="text-xs font-bold text-gray-200 truncate">
-            {syncStatus.lastSyncTime ? syncStatus.lastSyncTime : 'Not Synced Yet'}
+            {syncStatus.lastSyncTime ? syncStatus.lastSyncTime : 'Live Active'}
           </p>
           <div className="mt-2 flex items-center gap-1.5 text-[10px]">
             {syncStatus.pendingCount > 0 ? (
-              <span className="text-amber-400 font-bold">{syncStatus.pendingCount} Pending Local Queue</span>
+              <span className="text-amber-400 font-bold">
+                {syncStatus.pendingCount} Pending Sync
+              </span>
             ) : (
               <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Connected & Synced
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Connected &
+                Synced
               </span>
             )}
           </div>
@@ -351,13 +418,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <p className="text-xs text-gray-400 mt-0.5">
               Comparing class-wise attendance for:{' '}
               <span className="text-white font-medium">
-                {selectedComparisonDate === localTodayStr ? `Today (${selectedComparisonDate})` : selectedComparisonDate}
+                {selectedComparisonDate === localTodayStr
+                  ? `Today (${selectedComparisonDate})`
+                  : selectedComparisonDate}
               </span>
             </p>
           </div>
 
           <div className="flex items-center gap-2.5">
-            <label htmlFor="dashboard-date-picker" className="text-xs text-gray-400 font-medium flex items-center gap-1.5 shrink-0">
+            <label
+              htmlFor="dashboard-date-picker"
+              className="text-xs text-gray-400 font-medium flex items-center gap-1.5 shrink-0"
+            >
               <Calendar className="w-3.5 h-3.5 text-cyan-400" />
               <span>Select Date:</span>
             </label>
@@ -381,10 +453,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {classBreakdown.map((item) => (
-            <div key={item.className} className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-4 hover:border-white/10 transition-colors">
+            <div
+              key={item.className}
+              className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-4 hover:border-white/10 transition-colors"
+            >
               <div className="flex items-center justify-between mb-2">
                 <span className="font-bold text-xs text-gray-200">{item.className}</span>
-                <span className="text-xs font-serif italic text-cyan-400 font-bold">{item.percentage}%</span>
+                <span className="text-xs font-serif italic text-cyan-400 font-bold">
+                  {item.percentage}%
+                </span>
               </div>
               <div className="w-full bg-white/5 rounded-full h-1.5 mb-2.5 overflow-hidden">
                 <div
@@ -393,9 +470,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 />
               </div>
               <div className="flex items-center justify-between text-[10px] text-gray-400">
-                <span>Present: <strong className="text-emerald-400 font-semibold">{item.present}</strong></span>
-                <span>Absent: <strong className="text-rose-400 font-semibold">{item.absent}</strong></span>
-                <span>Total: <strong className="text-gray-300 font-semibold">{item.total}</strong></span>
+                <span>
+                  Present: <strong className="text-emerald-400 font-semibold">{item.present}</strong>
+                </span>
+                <span>
+                  Absent: <strong className="text-rose-400 font-semibold">{item.absent}</strong>
+                </span>
+                <span>
+                  Total: <strong className="text-gray-300 font-semibold">{item.total}</strong>
+                </span>
               </div>
             </div>
           ))}
@@ -403,7 +486,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Quick Action Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <button
           onClick={() => onSelectTab('scanner')}
           className="bg-[#111] border border-cyan-500/30 hover:border-cyan-400 rounded-2xl p-4 text-left transition-all hover:bg-white/5 group shadow-lg"
@@ -447,17 +530,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <h3 className="font-bold text-xs text-gray-200">Reports</h3>
           <p className="text-[10px] text-gray-500 mt-0.5">PDF & Excel</p>
         </button>
-
-        <button
-          onClick={() => onSelectTab('settings')}
-          className="bg-[#111] border border-white/5 hover:border-white/20 rounded-2xl p-4 text-left transition-all hover:bg-white/5 group shadow-lg"
-        >
-          <div className="w-10 h-10 rounded-xl bg-white/5 text-cyan-400 flex items-center justify-center mb-3">
-            <RefreshCw className="w-5 h-5" />
-          </div>
-          <h3 className="font-bold text-xs text-gray-200">Google Sheets</h3>
-          <p className="text-[10px] text-gray-500 mt-0.5">Apps Script</p>
-        </button>
       </div>
 
       {/* Recent Activity Live Stream */}
@@ -495,7 +567,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <tbody className="divide-y divide-white/5">
                 {recentScans.map((scan) => (
                   <tr key={scan.id} className="hover:bg-white/5 transition-colors">
-                    <td className="px-4 py-3 font-mono font-bold text-cyan-400">{scan.studentId}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-cyan-400">
+                      {scan.studentId}
+                    </td>
                     <td className="px-4 py-3 font-semibold text-white">{scan.studentName}</td>
                     <td className="px-4 py-3">{scan.className}</td>
                     <td className="px-4 py-3 text-gray-500">

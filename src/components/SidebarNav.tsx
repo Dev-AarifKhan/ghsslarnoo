@@ -11,12 +11,14 @@ import {
   Settings,
   History,
   Palette,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface SidebarNavProps {
   activeTab: string;
   onSelectTab: (tab: string) => void;
   pendingSyncCount: number;
+  atRiskCount?: number;
   onToggleTheme?: () => void;
   currentTheme?: string;
 }
@@ -25,6 +27,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   activeTab,
   onSelectTab,
   pendingSyncCount,
+  atRiskCount = 0,
   onToggleTheme,
   currentTheme = 'dark',
 }) => {
@@ -36,6 +39,13 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     { id: 'qrcards', label: 'QR Cards', icon: BadgeCheck },
     { id: 'manual', label: 'Manual Attendance', icon: ClipboardList },
     { id: 'viewer', label: 'Student Viewer', icon: UserCheck },
+    {
+      id: 'alerts',
+      label: 'Attendance Alerts',
+      icon: ShieldAlert,
+      badge: atRiskCount > 0 ? `${atRiskCount}` : null,
+      badgeColor: 'bg-rose-500 text-white',
+    },
     { id: 'reports', label: 'Reports & Export', icon: FileText },
     { id: 'settings', label: 'Settings & Sheets', icon: Settings, badge: pendingSyncCount > 0 ? `${pendingSyncCount}` : null },
     { id: 'logs', label: 'Audit Logs', icon: History },
@@ -70,7 +80,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               </div>
 
               {item.badge && (
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-500 text-black rounded-full animate-pulse">
+                <span
+                  className={`px-2 py-0.5 text-[10px] font-bold rounded-full animate-pulse ${
+                    item.badgeColor || 'bg-amber-500 text-black'
+                  }`}
+                >
                   {item.badge}
                 </span>
               )}

@@ -114,8 +114,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       const leave = sRecords.filter((r) => r.status === 'Leave').length;
       const holiday = sRecords.filter((r) => r.status === 'Holiday').length;
 
-      const workingDays = sRecords.filter((r) => r.status !== 'Holiday').length || 1;
-      const percentage = Math.round(((present + late) / workingDays) * 100);
+      // Only working days calculated (omit holidays). Only consider present and absent days.
+      const workingDays = present + absent;
+      const percentage = workingDays > 0 ? Math.min(100, Math.round((present / workingDays) * 100)) : 0;
 
       return {
         studentId: s.id,

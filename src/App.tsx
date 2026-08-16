@@ -13,6 +13,7 @@ import { ReportsView } from './components/ReportsView';
 import { StudentIDCardView } from './components/StudentIDCardView';
 import { SettingsView } from './components/SettingsView';
 import { AuditLogsView } from './components/AuditLogsView';
+import { AttendanceAlertsView } from './components/AttendanceAlertsView';
 
 import {
   Student,
@@ -377,6 +378,53 @@ export default function App() {
     );
   }
 
+  const lowThreshold = settings.lowAttendanceThreshold ?? 75;
+  const atRiskCount = React.useMemo(() => {
+    const uniqueStudentsMap = new Map<string, Student>();
+    (students || []).forEach((s) => {
+      if (s?.id?.trim()) {
+        const cleanId = s.id.trim().toUpperCase();
+        if (!uniqueStudentsMap.has(cleanId)) uniqueStudentsMap.set(cleanId, s);
+      }
+    });
+
+    let count = 0;
+    uniqueStudentsMap.forEach((_, cleanId) => {
+      const records = (attendance || []).filter(
+        (r) => r.studentId && r.studentId.trim().toUpperCase() === cleanId
+      );
+      const dateMap = new Map<string, AttendanceRecord>();
+      records.forEach((r) => {
+        const d = r.date || (r.timestamp ? new Date(r.timestamp).toISOString().split('T')[0] : '');
+        if (d) {
+          const existing = dateMap.get(d);
+          if (!existing || (r.timestamp || 0) >= (existing.timestamp || 0)) {
+            dateMap.set(d, r);
+          }
+        }
+      });
+      let p = 0;
+      let a = 0;
+      let l = 0;
+      let lv = 0;
+      let h = 0;
+      dateMap.forEach((rec) => {
+        const st = String(rec.status || '').trim().toLowerCase();
+        if (st === 'present' || st === 'p') p++;
+        else if (st === 'absent' || st === 'a') a++;
+        else if (st === 'late' || st === 'l') l++;
+        else if (st === 'leave' || st === 'excused' || st === 'lv') lv++;
+        else if (st === 'holiday' || st === 'h') h++;
+      });
+      const tot = p + a; // Only consider present and absent days, omitting holidays
+      if (tot > 0) {
+        const pct = Math.round((p / tot) * 100);
+        if (pct < lowThreshold) count++;
+      }
+    });
+    return count;
+  }, [students, attendance, lowThreshold]);
+
   const themeContainerClass =
     currentTheme === 'light'
       ? 'bg-slate-50 text-slate-900 theme-light'
@@ -429,6 +477,7 @@ export default function App() {
           activeTab={activeTab}
           onSelectTab={setActiveTab}
           pendingSyncCount={syncStatus.pendingCount}
+          atRiskCount={atRiskCount}
           onToggleTheme={handleToggleTheme}
           currentTheme={currentTheme}
         />
@@ -442,6 +491,19 @@ export default function App() {
               settings={settings}
               onSelectTab={setActiveTab}
               onSync={handleSync}
+              onSaveSettings={handleSaveSettings}
+              onUpdateStudent={handleUpdateStudent}
+            />
+          )}
+
+          {activeTab === 'alerts' && (
+            <AttendanceAlertsView
+              students={students}
+              attendance={attendance}
+              settings={settings}
+              onSelectTab={setActiveTab}
+              onSaveSettings={handleSaveSettings}
+              onUpdateStudent={handleUpdateStudent}
             />
           )}
 

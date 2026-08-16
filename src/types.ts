@@ -73,6 +73,7 @@ export interface AppSettings {
   enableAudio: boolean;
   disableScreenshots: boolean;
   encryptLocalDatabase: boolean;
+  lowAttendanceThreshold?: number; // Configurable attendance % threshold (e.g. 75)
   schoolAddress?: string;
   schoolEmail?: string;
   udiseCode?: string;

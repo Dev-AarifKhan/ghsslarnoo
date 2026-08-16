@@ -332,7 +332,51 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
             </div>
 
+            <h2 className="text-sm font-bold text-slate-100 border-b border-slate-800 pb-2 pt-3 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400" />
+              ⚠️ Attendance Thresholds & Student Risk Alerts
+            </h2>
 
+            <div className="p-4 bg-slate-800/80 border border-slate-700 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block font-semibold text-slate-200">
+                    Low Attendance Alert Threshold (%)
+                  </label>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Students below this percentage will be flagged as at-risk on the dashboard with parent notification options.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-xl">
+                  <span className="font-bold text-amber-400 text-sm font-mono">
+                    {formData.lowAttendanceThreshold ?? 75}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min="40"
+                  max="95"
+                  step="5"
+                  value={formData.lowAttendanceThreshold ?? 75}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      lowAttendanceThreshold: Number(e.target.value),
+                    })
+                  }
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                <span>40% (Lenient)</span>
+                <span className="text-amber-400 font-bold">75% (Mandatory Standard)</span>
+                <span>95% (Strict)</span>
+              </div>
+            </div>
 
             <div className="pt-3">
               <button
