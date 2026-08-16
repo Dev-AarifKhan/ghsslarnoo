@@ -756,9 +756,6 @@ export const StudentIDCardView: React.FC<StudentIDCardViewProps> = ({
                 <h2 className="text-[12px] font-extrabold uppercase text-slate-900 tracking-tight leading-tight mt-0.5">
                   {settings.schoolName || 'GOVT. HIGHER SECONDARY SCHOOL'}
                 </h2>
-                <h3 className="text-[12px] font-extrabold uppercase text-slate-900 tracking-tight leading-tight">
-                  LARNOO
-                </h3>
               </div>
 
               {/* Body Content */}

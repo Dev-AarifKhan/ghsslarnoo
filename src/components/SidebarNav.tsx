@@ -8,7 +8,6 @@ import {
   ClipboardList,
   UserCheck,
   FileText,
-  BarChart2,
   Settings,
   History,
   Palette,
@@ -38,7 +37,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     { id: 'manual', label: 'Manual Attendance', icon: ClipboardList },
     { id: 'viewer', label: 'Student Viewer', icon: UserCheck },
     { id: 'reports', label: 'Reports & Export', icon: FileText },
-    { id: 'analytics', label: 'Analytics', icon: BarChart2 },
     { id: 'settings', label: 'Settings & Sheets', icon: Settings, badge: pendingSyncCount > 0 ? `${pendingSyncCount}` : null },
     { id: 'logs', label: 'Audit Logs', icon: History },
   ];

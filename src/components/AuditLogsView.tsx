@@ -17,7 +17,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ logs }) => {
             System Audit & Activity Logs
           </h1>
           <p className="text-xs text-slate-300 mt-1">
-            Complete security audit trail tracking enrollment, attendance scans, edits, and Google Sheets syncs.
+            Complete security audit trail tracking enrollment, attendance scans, edits, and firebase syncs.
           </p>
         </div>
       </div>

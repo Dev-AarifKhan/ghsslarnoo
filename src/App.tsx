@@ -11,7 +11,6 @@ import { ManualAttendanceView } from './components/ManualAttendanceView';
 import { StudentViewer } from './components/StudentViewer';
 import { ReportsView } from './components/ReportsView';
 import { StudentIDCardView } from './components/StudentIDCardView';
-import { AnalyticsView } from './components/AnalyticsView';
 import { SettingsView } from './components/SettingsView';
 import { AuditLogsView } from './components/AuditLogsView';
 
@@ -412,7 +411,7 @@ export default function App() {
           <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
             <Eye className="w-4 h-4 text-amber-400 shrink-0" />
             <span className="flex-1">
-              <strong>Guest Read-Only Mode:</strong> You are viewing website content as a guest. All reports, student records, and analytics are in read-only mode.
+              <strong>Guest Read-Only Mode:</strong> You are viewing website content as a guest. All reports, student records, and logs are in read-only mode.
             </span>
             <button
               onClick={handleLogout}
@@ -497,10 +496,6 @@ export default function App() {
               attendance={attendance}
               onMarkAttendance={handleMarkAttendance}
             />
-          )}
-
-          {activeTab === 'analytics' && (
-            <AnalyticsView students={students} attendance={attendance} />
           )}
 
           {activeTab === 'settings' && (

@@ -122,6 +122,11 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({
   const lastScannedIdRef = useRef<string | null>(null);
   const lastScannedTimeRef = useRef<number>(0);
   const isStoppingRef = useRef<boolean>(false);
+  const isStartingRef = useRef<boolean>(false);
+  const selectedCameraIdRef = useRef<string>('');
+  selectedCameraIdRef.current = selectedCameraId;
+  const facingModeRef = useRef<'environment' | 'user'>('environment');
+  facingModeRef.current = facingMode;
 
   const studentsRef = useRef(students);
   studentsRef.current = students;
@@ -150,6 +155,9 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({
 
     // Immediately stop hardware media tracks so LED turns off
     forceStopAllCameraTracks();
+
+    // Brief delay to allow device driver hardware mutex release
+    await new Promise((r) => setTimeout(r, 150));
 
     setIsScanning(false);
     setIsTorchOn(false);
@@ -244,18 +252,47 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({
     []
   );
 
-  // Start Camera Scanner
+  // Helper to enumerate available video devices non-destructively
+  const updateAvailableCameras = useCallback(async () => {
+    try {
+      if (navigator?.mediaDevices?.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+        if (videoInputs.length > 0) {
+          const formatted: CameraDevice[] = videoInputs.map((d, idx) => ({
+            id: d.deviceId,
+            label: d.label || `Camera ${idx + 1}`,
+          }));
+          setCameraDevices(formatted);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not enumerate cameras via mediaDevices:', e);
+    }
+  }, []);
+
+  // Start Camera Scanner with robust lock, fallback retry and hardware release delay
   const startScanner = useCallback(
     async (targetCameraIdOrFacing?: string) => {
-      await stopScanner();
-
-      const viewportId = 'qr-reader-viewport';
-      const viewport = document.getElementById(viewportId);
-      if (!viewport) return;
-      viewport.innerHTML = '';
+      if (isStartingRef.current) return;
+      isStartingRef.current = true;
 
       try {
-        const html5Qrcode = new Html5Qrcode(viewportId);
+        setCameraError(null);
+        await stopScanner();
+
+        // Hardware driver cooldown delay to prevent NotReadableError
+        await new Promise((resolve) => setTimeout(resolve, 250));
+
+        const viewportId = 'qr-reader-viewport';
+        const viewport = document.getElementById(viewportId);
+        if (!viewport) {
+          isStartingRef.current = false;
+          return;
+        }
+        viewport.innerHTML = '';
+
+        let html5Qrcode = new Html5Qrcode(viewportId);
         html5QrcodeRef.current = html5Qrcode;
 
         const config = {
@@ -270,23 +307,67 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({
           aspectRatio: 1.0,
         };
 
-        const cameraChoice =
-          targetCameraIdOrFacing || selectedCameraId || { facingMode };
+        const currentFacing = facingModeRef.current;
+        const currentCameraId = selectedCameraIdRef.current;
 
-        await html5Qrcode.start(
-          cameraChoice,
-          config,
-          (decodedText) => {
-            handleQRScanned(decodedText);
-          },
-          () => {
-            // Per-frame decode failure is normal when no QR is present
+        let primaryChoice: any = { facingMode: currentFacing || 'environment' };
+        if (targetCameraIdOrFacing) {
+          if (targetCameraIdOrFacing === 'environment' || targetCameraIdOrFacing === 'user') {
+            primaryChoice = { facingMode: targetCameraIdOrFacing };
+          } else {
+            primaryChoice = targetCameraIdOrFacing;
           }
-        );
+        } else if (currentCameraId) {
+          primaryChoice = currentCameraId;
+        }
+
+        try {
+          await html5Qrcode.start(
+            primaryChoice,
+            config,
+            (decodedText) => {
+              handleQRScanned(decodedText);
+            },
+            () => {
+              // Per-frame decode failure is normal when no QR is present
+            }
+          );
+        } catch (firstErr: any) {
+          console.warn('Primary camera start failed, attempting recovery mode:', firstErr);
+          
+          // Clean up first attempt completely
+          try {
+            if (html5Qrcode.isScanning) await html5Qrcode.stop();
+            html5Qrcode.clear();
+          } catch (_) {}
+          forceStopAllCameraTracks();
+          viewport.innerHTML = '';
+
+          // Wait 350ms for device driver release
+          await new Promise((resolve) => setTimeout(resolve, 350));
+
+          // Fresh instance
+          html5Qrcode = new Html5Qrcode(viewportId);
+          html5QrcodeRef.current = html5Qrcode;
+
+          // Fallback: try environment facingMode
+          const fallbackChoice = { facingMode: 'environment' as const };
+          await html5Qrcode.start(
+            fallbackChoice,
+            config,
+            (decodedText) => {
+              handleQRScanned(decodedText);
+            },
+            () => {}
+          );
+        }
 
         setIsScanning(true);
         setIsPaused(false);
         setCameraError(null);
+
+        // Populate device labels now that camera permission is active
+        updateAvailableCameras();
 
         // Attach safe error/abort handlers to video elements inside the viewport
         const videoElements = viewport.querySelectorAll('video');
@@ -307,45 +388,53 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({
           setHasTorch(false);
         }
       } catch (err: any) {
-        console.error('Camera QR start error:', err);
+        console.warn('Camera QR start handled error:', err);
         setIsScanning(false);
         let errMsg = 'Failed to access camera.';
+        const errString = String(err?.message || err || '');
+
         if (
           err?.name === 'NotAllowedError' ||
-          String(err).includes('Permission')
+          errString.includes('Permission') ||
+          errString.includes('NotAllowed')
         ) {
           errMsg =
             'Camera permission was denied. Please allow camera permissions in your browser address bar.';
         } else if (
           err?.name === 'NotFoundError' ||
-          String(err).includes('NotFound')
+          errString.includes('NotFound')
         ) {
           errMsg = 'No active camera hardware found on this device.';
         } else if (
           err?.name === 'NotReadableError' ||
-          String(err).includes('in use')
+          errString.includes('NotReadableError') ||
+          errString.includes('in use') ||
+          errString.includes('Could not start video source')
         ) {
           errMsg =
-            'Camera is currently locked or in use by another application/tab.';
+            'Camera hardware is temporarily busy or locked by another application/tab. Tap "Retry Camera" or use "Manual ID Entry".';
         } else if (typeof err === 'string') {
           errMsg = err;
         } else if (err?.message) {
           errMsg = err.message;
         }
         setCameraError(errMsg);
+      } finally {
+        isStartingRef.current = false;
       }
     },
-    [stopScanner, selectedCameraId, facingMode, handleQRScanned]
+    [stopScanner, handleQRScanned, updateAvailableCameras]
   );
 
-  // Fetch Available Cameras & suppress benign camera surface abort errors on Mount
+  // Suppress benign camera surface abort errors on Mount & load initial device list
   useEffect(() => {
     const handleCameraAbortError = (event: ErrorEvent) => {
       const msg = String(event?.message || event?.error || '');
       if (
         msg.includes('onabort') ||
         msg.includes('RenderedCameraImpl') ||
-        msg.includes('video surface')
+        msg.includes('video surface') ||
+        msg.includes('NotReadableError')
       ) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -357,7 +446,8 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({
       if (
         reason.includes('onabort') ||
         reason.includes('RenderedCameraImpl') ||
-        reason.includes('video surface')
+        reason.includes('video surface') ||
+        reason.includes('NotReadableError')
       ) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -367,37 +457,14 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({
     window.addEventListener('error', handleCameraAbortError);
     window.addEventListener('unhandledrejection', handleCameraAbortRejection);
 
-    Html5Qrcode.getCameras()
-      .then((devices) => {
-        if (devices && devices.length > 0) {
-          const formatted = devices.map((d, index) => ({
-            id: d.id,
-            label: d.label || `Camera ${index + 1}`,
-          }));
-          setCameraDevices(formatted);
-          // Prefer back/environment camera
-          const backCam = formatted.find(
-            (c) =>
-              c.label.toLowerCase().includes('back') ||
-              c.label.toLowerCase().includes('rear') ||
-              c.label.toLowerCase().includes('environment')
-          );
-          if (backCam) {
-            setSelectedCameraId(backCam.id);
-          } else {
-            setSelectedCameraId(formatted[0].id);
-          }
-        }
-      })
-      .catch((err) => {
-        console.warn('Could not enumerate cameras:', err);
-      });
+    // Initial silent device enumeration without locking camera tracks
+    updateAvailableCameras();
 
     return () => {
       window.removeEventListener('error', handleCameraAbortError);
       window.removeEventListener('unhandledrejection', handleCameraAbortRejection);
     };
-  }, []);
+  }, [updateAvailableCameras]);
 
   // Handle activeTabMode switching and camera power toggle
   useEffect(() => {
@@ -408,19 +475,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({
     }
 
     return () => {
-      // Immediate cleanup when switching tabs or unmounting component
-      if (html5QrcodeRef.current) {
-        try {
-          if (html5QrcodeRef.current.isScanning) {
-            html5QrcodeRef.current.stop().catch(() => {}).finally(() => {
-              forceStopAllCameraTracks();
-            });
-          }
-          html5QrcodeRef.current.clear();
-        } catch (e) {}
-        html5QrcodeRef.current = null;
-      }
-      forceStopAllCameraTracks();
+      stopScanner();
     };
   }, [activeTabMode, isCameraActive, startScanner, stopScanner]);
 

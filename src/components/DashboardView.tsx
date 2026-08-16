@@ -8,7 +8,6 @@ import {
   UserPlus,
   ClipboardList,
   FileText,
-  BarChart2,
   RefreshCw,
   AlertTriangle,
   TrendingUp,
@@ -404,7 +403,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Quick Action Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <button
           onClick={() => onSelectTab('scanner')}
           className="bg-[#111] border border-cyan-500/30 hover:border-cyan-400 rounded-2xl p-4 text-left transition-all hover:bg-white/5 group shadow-lg"
@@ -447,17 +446,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <h3 className="font-bold text-xs text-gray-200">Reports</h3>
           <p className="text-[10px] text-gray-500 mt-0.5">PDF & Excel</p>
-        </button>
-
-        <button
-          onClick={() => onSelectTab('analytics')}
-          className="bg-[#111] border border-white/5 hover:border-white/20 rounded-2xl p-4 text-left transition-all hover:bg-white/5 group shadow-lg"
-        >
-          <div className="w-10 h-10 rounded-xl bg-white/5 text-purple-400 flex items-center justify-center mb-3">
-            <BarChart2 className="w-5 h-5" />
-          </div>
-          <h3 className="font-bold text-xs text-gray-200">Analytics</h3>
-          <p className="text-[10px] text-gray-500 mt-0.5">Visual graphs</p>
         </button>
 
         <button
