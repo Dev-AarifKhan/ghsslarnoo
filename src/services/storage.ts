@@ -103,6 +103,19 @@ export const saveSession = (session: UserSession): void => {
   setItem(KEYS.SESSION, session);
 };
 
+export const clearSession = (): void => {
+  const settings = getSettings();
+  const loggedOutSession: UserSession = {
+    username: '',
+    teacherName: settings.teacherName,
+    schoolName: settings.schoolName,
+    role: 'Teacher',
+    isAuthenticated: false,
+    isLoggedIn: false,
+  };
+  setItem(KEYS.SESSION, loggedOutSession);
+};
+
 // Password & Credentials Security
 export interface SavedLoginInfo {
   username: string;
@@ -128,13 +141,19 @@ export const saveSavedLogin = (info: SavedLoginInfo | null): void => {
 };
 
 let cachedPassword: string = getItem<string>(KEYS.CREDENTIALS, 'password123');
+let hasInitialPasswordLoaded = false;
 
 export const initPasswordRealtimeSync = (onRemoteChange?: (newPass: string) => void) => {
   return subscribeToCredentialsPassword((remotePass) => {
+    const isFirstLoad = !hasInitialPasswordLoaded;
+    hasInitialPasswordLoaded = true;
+
     const oldPass = cachedPassword;
     cachedPassword = remotePass;
     setItem(KEYS.CREDENTIALS, remotePass);
-    if (oldPass !== remotePass && onRemoteChange) {
+
+    // Only fire remote change event if this is NOT the initial connection load and the password actually changed
+    if (!isFirstLoad && oldPass && remotePass && oldPass !== remotePass && onRemoteChange) {
       onRemoteChange(remotePass);
     }
   });

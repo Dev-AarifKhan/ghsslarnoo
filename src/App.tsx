@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { RefreshCw, CheckCircle2, AlertCircle, X, Eye } from 'lucide-react';
 import { Header } from './components/Header';
 import { SidebarNav } from './components/SidebarNav';
@@ -31,6 +31,7 @@ import {
   saveSettings,
   getSession,
   saveSession,
+  clearSession,
   getStudents,
   saveStudents,
   addStudent,
@@ -78,6 +79,7 @@ export default function App() {
 
   // Reload data from storage
   const reloadData = () => {
+    setSession(getSession());
     setStudents(getStudents());
     setAttendance(getAttendanceRecords());
     setLogs(getLogs());
@@ -163,6 +165,53 @@ export default function App() {
     };
   }, []);
 
+  const lowThreshold = settings.lowAttendanceThreshold ?? 75;
+  const atRiskCount = useMemo(() => {
+    const uniqueStudentsMap = new Map<string, Student>();
+    (students || []).forEach((s) => {
+      if (s?.id?.trim()) {
+        const cleanId = s.id.trim().toUpperCase();
+        if (!uniqueStudentsMap.has(cleanId)) uniqueStudentsMap.set(cleanId, s);
+      }
+    });
+
+    let count = 0;
+    uniqueStudentsMap.forEach((_, cleanId) => {
+      const records = (attendance || []).filter(
+        (r) => r.studentId && r.studentId.trim().toUpperCase() === cleanId
+      );
+      const dateMap = new Map<string, AttendanceRecord>();
+      records.forEach((r) => {
+        const d = r.date || (r.timestamp ? new Date(r.timestamp).toISOString().split('T')[0] : '');
+        if (d) {
+          const existing = dateMap.get(d);
+          if (!existing || (r.timestamp || 0) >= (existing.timestamp || 0)) {
+            dateMap.set(d, r);
+          }
+        }
+      });
+      let p = 0;
+      let a = 0;
+      let l = 0;
+      let lv = 0;
+      let h = 0;
+      dateMap.forEach((rec) => {
+        const st = String(rec.status || '').trim().toLowerCase();
+        if (st === 'present' || st === 'p') p++;
+        else if (st === 'absent' || st === 'a') a++;
+        else if (st === 'late' || st === 'l') l++;
+        else if (st === 'leave' || st === 'excused' || st === 'lv') lv++;
+        else if (st === 'holiday' || st === 'h') h++;
+      });
+      const tot = p + a; // Only consider present and absent days, omitting holidays
+      if (tot > 0) {
+        const pct = Math.round((p / tot) * 100);
+        if (pct < lowThreshold) count++;
+      }
+    });
+    return count;
+  }, [students, attendance, lowThreshold]);
+
   // Sync handler (Real-time Cloud Firestore Refresh)
   const handleSync = async (isUserTrigger: boolean = true) => {
     if (isUserTrigger) {
@@ -214,18 +263,17 @@ export default function App() {
 
   // Handle Login
   const handleLoginSuccess = (newSession: UserSession) => {
-    setSession(newSession);
     saveSession(newSession);
+    setSession(newSession);
+    setActiveTab('dashboard');
   };
 
   // Handle Direct Logout
   const handleLogout = () => {
-    const updatedSession: UserSession = {
-      ...session,
-      isLoggedIn: false,
-    };
-    setSession(updatedSession);
-    saveSession(updatedSession);
+    clearSession();
+    const loggedOut = getSession();
+    setSession(loggedOut);
+    setActiveTab('dashboard');
   };
 
   const currentTheme: ThemePreset = settings.themePreset || (settings.darkMode ? 'dark' : 'light');
@@ -378,53 +426,6 @@ export default function App() {
     );
   }
 
-  const lowThreshold = settings.lowAttendanceThreshold ?? 75;
-  const atRiskCount = React.useMemo(() => {
-    const uniqueStudentsMap = new Map<string, Student>();
-    (students || []).forEach((s) => {
-      if (s?.id?.trim()) {
-        const cleanId = s.id.trim().toUpperCase();
-        if (!uniqueStudentsMap.has(cleanId)) uniqueStudentsMap.set(cleanId, s);
-      }
-    });
-
-    let count = 0;
-    uniqueStudentsMap.forEach((_, cleanId) => {
-      const records = (attendance || []).filter(
-        (r) => r.studentId && r.studentId.trim().toUpperCase() === cleanId
-      );
-      const dateMap = new Map<string, AttendanceRecord>();
-      records.forEach((r) => {
-        const d = r.date || (r.timestamp ? new Date(r.timestamp).toISOString().split('T')[0] : '');
-        if (d) {
-          const existing = dateMap.get(d);
-          if (!existing || (r.timestamp || 0) >= (existing.timestamp || 0)) {
-            dateMap.set(d, r);
-          }
-        }
-      });
-      let p = 0;
-      let a = 0;
-      let l = 0;
-      let lv = 0;
-      let h = 0;
-      dateMap.forEach((rec) => {
-        const st = String(rec.status || '').trim().toLowerCase();
-        if (st === 'present' || st === 'p') p++;
-        else if (st === 'absent' || st === 'a') a++;
-        else if (st === 'late' || st === 'l') l++;
-        else if (st === 'leave' || st === 'excused' || st === 'lv') lv++;
-        else if (st === 'holiday' || st === 'h') h++;
-      });
-      const tot = p + a; // Only consider present and absent days, omitting holidays
-      if (tot > 0) {
-        const pct = Math.round((p / tot) * 100);
-        if (pct < lowThreshold) count++;
-      }
-    });
-    return count;
-  }, [students, attendance, lowThreshold]);
-
   const themeContainerClass =
     currentTheme === 'light'
       ? 'bg-slate-50 text-slate-900 theme-light'
@@ -480,6 +481,8 @@ export default function App() {
           atRiskCount={atRiskCount}
           onToggleTheme={handleToggleTheme}
           currentTheme={currentTheme}
+          onLogout={handleLogout}
+          userRole={session.role}
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">

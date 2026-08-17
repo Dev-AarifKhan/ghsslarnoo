@@ -41,21 +41,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     setIsAuthenticating(true);
     try {
       const isValid = await verifyUserPasswordAsync(password);
-      const un = username.trim().toLowerCase();
+      const trimmedUser = username.trim();
+      const un = trimmedUser.toLowerCase();
       const teacherLower = (defaultTeacherName || 'aarif ahmad khan').toLowerCase();
 
-      // Accept teacher name, partial instructor name, or standard handles
+      // Accept teacher name, partial instructor name, email, or any valid user identity
       const isAllowedUser =
-        un === teacherLower ||
-        un.includes('aarif') ||
-        un.includes('khan') ||
-        un === 'teacher' ||
-        un === 'admin';
+        trimmedUser.length > 0 &&
+        (un === teacherLower ||
+          un.includes('aarif') ||
+          un.includes('khan') ||
+          un.includes('tawheed') ||
+          un.includes('ghss') ||
+          un === 'teacher' ||
+          un === 'admin' ||
+          un.includes('@') ||
+          trimmedUser.length >= 2);
 
       if (isAllowedUser && isValid) {
         if (rememberMe) {
           saveSavedLogin({
-            username: username.trim(),
+            username: trimmedUser,
             password: password.trim(),
             role: role,
             rememberMe: true,
@@ -65,7 +71,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         }
 
         const session: UserSession = {
-          username: username.trim(),
+          username: trimmedUser,
           teacherName: defaultTeacherName || 'Aarif Ahmad Khan',
           schoolName: defaultSchoolName,
           role: role,

@@ -12,6 +12,7 @@ import {
   History,
   Palette,
   ShieldAlert,
+  LogOut,
 } from 'lucide-react';
 
 interface SidebarNavProps {
@@ -21,6 +22,8 @@ interface SidebarNavProps {
   atRiskCount?: number;
   onToggleTheme?: () => void;
   currentTheme?: string;
+  onLogout?: () => void;
+  userRole?: string;
 }
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({
@@ -30,6 +33,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   atRiskCount = 0,
   onToggleTheme,
   currentTheme = 'dark',
+  onLogout,
+  userRole,
 }) => {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -94,6 +99,22 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       </nav>
 
       <div className="mt-6 pt-4 border-t border-white/5 px-1 space-y-3">
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-xs font-semibold text-rose-300 hover:text-rose-200 transition-all shadow-sm"
+            title="Sign out of your active session"
+          >
+            <div className="flex items-center gap-2.5">
+              <LogOut className="w-4 h-4 text-rose-400" />
+              <span>{userRole === 'Guest' ? 'Exit Guest Mode' : 'Sign Out Session'}</span>
+            </div>
+            <span className="text-[10px] uppercase font-bold text-rose-400 bg-rose-500/20 px-2 py-0.5 rounded-md">
+              Logout
+            </span>
+          </button>
+        )}
+
         {onToggleTheme && (
           <button
             onClick={onToggleTheme}
